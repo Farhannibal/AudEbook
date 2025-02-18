@@ -190,6 +190,19 @@ class EpubReaderFragment : VisualReaderFragment() {
                             menuSearch.collapseActionView()
                             return true
                         }
+                        R.id.debugButton -> {
+
+//                            navigator.applyDecorations(
+//                                listOf(Decoration(
+////                                    locator = location.utteranceLocator,
+//                                    style = Decoration.Style.Highlight(tint = Color.RED)
+//                                )),
+//                                "highlight"
+//                            )
+
+
+                            return true
+                        }
                     }
                     return false
                 }
