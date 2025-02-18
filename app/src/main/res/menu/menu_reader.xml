@@ -54,4 +54,12 @@
         app:showAsAction="always"
         tools:ignore="AlwaysShowAction"/>
 
+    <item
+        android:id="@+id/debugButton"
+        android:icon="@drawable/ic_baseline_edit_24"
+        android:visible="false"
+        android:title="DEBUG"
+        app:showAsAction="always"
+        tools:ignore="AlwaysShowAction"/>
+
 </menu>

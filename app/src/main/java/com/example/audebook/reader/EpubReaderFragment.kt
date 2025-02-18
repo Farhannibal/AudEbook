@@ -47,6 +47,8 @@ class EpubReaderFragment : VisualReaderFragment() {
     private lateinit var menuSearch: MenuItem
     lateinit var menuSearchView: SearchView
 
+    private lateinit var menuDebug: MenuItem
+
     private var isSearchViewIconified = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -141,6 +143,8 @@ class EpubReaderFragment : VisualReaderFragment() {
         }
         navigator = childFragmentManager.findFragmentByTag(NAVIGATOR_FRAGMENT_TAG) as EpubNavigatorFragment
 
+//        navigator.currentLocator.value
+
         return view
     }
 
@@ -166,6 +170,11 @@ class EpubReaderFragment : VisualReaderFragment() {
                     menuSearch = menu.findItem(R.id.search).apply {
                         isVisible = true
                         menuSearchView = actionView as SearchView
+                    }
+
+                    menuDebug = menu.findItem(R.id.debugButton).apply {
+                        isVisible = true
+//                        menuSearchView = actionView as SearchView
                     }
 
                     connectSearch()
