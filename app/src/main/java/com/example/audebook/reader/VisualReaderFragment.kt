@@ -84,6 +84,8 @@ import com.example.audebook.utils.padSystemUi
 import com.example.audebook.utils.showSystemUi
 import com.example.audebook.utils.toggleSystemUi
 import com.example.audebook.utils.viewLifecycle
+import org.readium.r2.shared.publication.services.content.content
+import timber.log.Timber
 
 /*
  * Base reader fragment class
@@ -286,6 +288,10 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                                 style = Decoration.Style.Highlight(tint = Color.RED)
                             )
                         }
+                        val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+//                        val start2 = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+//                        publication.content(start)
+                        Timber.d(start.toString())
                         navigator.applyDecorations(listOfNotNull(decoration), "tts")
                     }
             }

@@ -38,6 +38,9 @@ import com.example.audebook.LITERATA
 import com.example.audebook.R
 import com.example.audebook.reader.preferences.UserPreferencesViewModel
 import com.example.audebook.search.SearchFragment
+import org.readium.r2.navigator.VisualNavigator
+import org.readium.r2.shared.publication.services.content.content
+import timber.log.Timber
 
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment() {
@@ -200,6 +203,34 @@ class EpubReaderFragment : VisualReaderFragment() {
 //                                "highlight"
 //                            )
 
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                    // Display page number labels if the book contains a `page-list` navigation document.
+                                    (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+                                    val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+                                    val content = publication.content(start)
+//                        val start2 = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+//
+//
+//
+//                                    TODODODOODODODODODOODODO
+//
+                                    val publicati = publication.content(start)
+                                    val wholeText = content?.text()
+                                    Timber.d(wholeText.toString())
+
+
+
+                                    val iterator = content?.iterator()
+                                    while (iterator!!.hasNext()) {
+                                        val element = iterator.next()
+                                        Timber.d(element.toString())
+                                    }
+                                }
+                            }
+
+
+
 
                             return true
                         }
@@ -209,6 +240,11 @@ class EpubReaderFragment : VisualReaderFragment() {
             },
             viewLifecycleOwner
         )
+    }
+
+    private suspend fun testFunc() {
+
+
     }
 
     /**
