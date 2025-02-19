@@ -100,6 +100,8 @@ dependencies {
 
     implementation("com.arthenica:ffmpeg-kit-full:6.0-2.LTS")
 
+    implementation("info.debatty:java-string-similarity:2.0.0")
+
 
 
     implementation(libs.androidx.core.ktx)

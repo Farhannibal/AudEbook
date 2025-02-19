@@ -42,6 +42,8 @@ import org.readium.r2.navigator.VisualNavigator
 import org.readium.r2.shared.publication.services.content.content
 import timber.log.Timber
 
+import info.debatty.java.stringsimilarity.JaroWinkler
+
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment() {
 
@@ -54,10 +56,16 @@ class EpubReaderFragment : VisualReaderFragment() {
 
     private var isSearchViewIconified = true
 
+    private lateinit var locators: MutableList<Locator>
+    private lateinit var locatorMap: MutableMap<Locator, Boolean>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
             isSearchViewIconified = savedInstanceState.getBoolean(IS_SEARCH_VIEW_ICONIFIED)
         }
+
+        locators = mutableListOf()
+        locatorMap = mutableMapOf()
 
         val readerData = model.readerInitData as? EpubReaderInitData ?: run {
             // We provide a dummy fragment factory  if the ReaderActivity is restored after the
@@ -216,20 +224,49 @@ class EpubReaderFragment : VisualReaderFragment() {
 //                                    TODODODOODODODODODOODODO
 //
                                     val publicati = publication.content(start)
-                                    val wholeText = content?.text()
-                                    Timber.d(wholeText.toString())
+//                                    val wholeText = content?.text()
+//                                    Timber.d(wholeText.toString())
 
 
+
+//                                    fun getCloseMatches(
+//                                        word: String,
+//                                        possibilities: List<String>,
+//                                        n: Int = 1,
+//                                        cutoff: Double = 0.5
+//                                    ): List<String> {
+//                                        val jaroWinkler = JaroWinkler()
+//                                        return possibilities
+//                                            .map { it to jaroWinkler.similarity(word, it) }
+//                                            .filter { it.second >= cutoff }
+//                                            .sortedByDescending { it.second }
+//                                            .take(n)
+//                                            .map { it.first }
+//                                    }
+//
+//                                    fun main() {
+//                                        val eachText = "example"
+//                                        val sentences = listOf("sample", "example", "exemplar", "test", "simple")
+//                                        val resultSegments = listOf("segment1", "segment2") // Example segments
+//
+//                                        val closeMatches = getCloseMatches(eachText, sentences.take(resultSegments.size * 2))
+//                                        println(closeMatches)
+//                                    }
+
+                                    var i = 0;
 
                                     val iterator = content?.iterator()
-                                    while (iterator!!.hasNext()) {
+                                    locators.clear()
+                                    while (iterator!!.hasNext() && i <= 10) {
                                         val element = iterator.next()
-                                        Timber.d(element.toString())
+//                                        Timber.d(element.locator.text.highlight)
+                                        locators.add(element.locator)
+                                        i=i+1
                                     }
                                 }
                             }
 
-
+                            Timber.d(locators.toString())
 
 
                             return true
