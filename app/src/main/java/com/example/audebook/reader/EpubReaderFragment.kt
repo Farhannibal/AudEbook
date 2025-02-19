@@ -44,6 +44,8 @@ import timber.log.Timber
 
 import info.debatty.java.stringsimilarity.JaroWinkler
 
+import kotlin.random.Random
+
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment() {
 
@@ -229,6 +231,53 @@ class EpubReaderFragment : VisualReaderFragment() {
 
 
 
+
+
+                                    var i = 0;
+
+                                    val iterator = content?.iterator()
+                                    locators.clear()
+                                    while (iterator!!.hasNext() && i <= 10) {
+                                        val element = iterator.next()
+//                                        Timber.d(element.locator.text.highlight)
+                                        locators.add(element.locator)
+                                        i=i+1
+                                    }
+
+                                    if (!locators.isEmpty()) {
+
+//                                        val decorations: List<Decoration> = listOf()
+//
+//                                        for (locator in locators) {
+//
+//                                            val decorationesd = Decoration(
+//                                                id = "tts",
+//                                                locator = locator,
+//                                                style = Decoration.Style.Highlight(tint = Color.RED)
+//                                            )
+//
+//                                            decorations.plus(decorationesd)
+//
+//                                        }
+                                        val random = Random.Default
+                                        val decorations: List<Decoration> = locators.map { locator ->
+                                            Decoration(
+                                                id = "tts",
+                                                locator = locator,
+                                                style = Decoration.Style.Highlight(tint = Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256)))
+                                            )
+                                        }
+
+                                        navigator.applyDecorations(
+                                            decorations,
+                                            "tts"
+                                        )
+                                    }
+                                }
+                            }
+
+                            Timber.d(locators.toString())
+
 //                                    fun getCloseMatches(
 //                                        word: String,
 //                                        possibilities: List<String>,
@@ -252,22 +301,6 @@ class EpubReaderFragment : VisualReaderFragment() {
 //                                        val closeMatches = getCloseMatches(eachText, sentences.take(resultSegments.size * 2))
 //                                        println(closeMatches)
 //                                    }
-
-                                    var i = 0;
-
-                                    val iterator = content?.iterator()
-                                    locators.clear()
-                                    while (iterator!!.hasNext() && i <= 10) {
-                                        val element = iterator.next()
-//                                        Timber.d(element.locator.text.highlight)
-                                        locators.add(element.locator)
-                                        i=i+1
-                                    }
-                                }
-                            }
-
-                            Timber.d(locators.toString())
-
 
                             return true
                         }
