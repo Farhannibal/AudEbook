@@ -43,8 +43,16 @@ import org.readium.r2.shared.publication.services.content.content
 import timber.log.Timber
 
 import info.debatty.java.stringsimilarity.JaroWinkler
+import org.readium.r2.shared.publication.services.content.ContentTokenizer
 
 import kotlin.random.Random
+
+import org.readium.r2.shared.util.tokenizer.DefaultTextContentTokenizer
+import org.readium.r2.shared.util.tokenizer.TextTokenizer
+import org.readium.r2.shared.util.tokenizer.TextUnit
+import org.readium.r2.shared.util.tokenizer.Tokenizer
+import org.readium.r2.shared.util.Language
+import java.util.Locale
 
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment() {
@@ -217,6 +225,10 @@ class EpubReaderFragment : VisualReaderFragment() {
                                 viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                                     // Display page number labels if the book contains a `page-list` navigation document.
                                     (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+                                    navigator.applyDecorations(
+                                        listOfNotNull(null),
+                                        "tts"
+                                    )
                                     val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
                                     val content = publication.content(start)
 //                        val start2 = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
@@ -225,13 +237,13 @@ class EpubReaderFragment : VisualReaderFragment() {
 //
 //                                    TODODODOODODODODODOODODO
 //
+                                    val tokenizer = DefaultTextContentTokenizer(unit = TextUnit.Sentence, language = Language(Locale.ENGLISH))
                                     val publicati = publication.content(start)
 //                                    val wholeText = content?.text()
 //                                    Timber.d(wholeText.toString())
 
-
-
-
+//                                    val tokenizedContent = tokenizer.tokenize(content?.text().toString())
+//                                    Timber.d(tokenizedContent.toString())
 
                                     var i = 0;
 
@@ -239,26 +251,38 @@ class EpubReaderFragment : VisualReaderFragment() {
                                     locators.clear()
                                     while (iterator!!.hasNext() && i <= 10) {
                                         val element = iterator.next()
+                                        val string = element.locator.text.highlight.toString()
 //                                        Timber.d(element.locator.text.highlight)
-                                        locators.add(element.locator)
+                                        val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
+                                        for (range in tokenizedContent){
+//                                            Timber.d(range.toString())
+
+                                            val contextSnippetLength = 50
+
+                                            val after = string.substring(
+                                                range.last,
+                                                (range.last + contextSnippetLength).coerceAtMost(string.length)
+                                            )
+                                            val before = string.substring(
+                                                (range.first - contextSnippetLength).coerceAtLeast(0),
+                                                range.first
+                                            )
+                                            val subLocator = Locator.Text(
+                                                after = after.takeIf { it.isNotEmpty() },
+                                                before = before.takeIf { it.isNotEmpty() },
+                                                highlight = string.substring(range)
+                                            )
+
+//                                            Timber.d(subLocator.highlight)
+                                            locators.add(element.locator.copy(text = subLocator))
+                                        }
+
+//                                        locators.add(element.locator)
                                         i=i+1
                                     }
 
                                     if (!locators.isEmpty()) {
 
-//                                        val decorations: List<Decoration> = listOf()
-//
-//                                        for (locator in locators) {
-//
-//                                            val decorationesd = Decoration(
-//                                                id = "tts",
-//                                                locator = locator,
-//                                                style = Decoration.Style.Highlight(tint = Color.RED)
-//                                            )
-//
-//                                            decorations.plus(decorationesd)
-//
-//                                        }
                                         val random = Random.Default
                                         val decorations: List<Decoration> = locators.map { locator ->
                                             Decoration(
