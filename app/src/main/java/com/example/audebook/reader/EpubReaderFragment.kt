@@ -62,6 +62,7 @@ import com.example.audebook.Application
 import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationError.Companion.invoke
 import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
+import org.json.JSONObject
 import org.readium.adapter.exoplayer.audio.ExoPlayerEngineProvider
 import org.readium.navigator.media.audio.AudioNavigatorFactory
 import org.readium.navigator.media.audio.AudioNavigatorFactory.Companion.invoke
@@ -303,9 +304,12 @@ class EpubReaderFragment : VisualReaderFragment() {
                                         )
                                     }
 
+                                    val initialLocator = book.progression
+                                        ?.let { Locator.fromJSON(JSONObject(it)) }
+
                                     val readerInitData = when {
-                                        publication.conformsTo(Publication.Profile.AUDIOBOOK) ->
-                                            openAudio(bookId, publication, initialLocator)
+                                        (audioPublication as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
+                                            openAudio(2, audioPublication, initialLocator)
                                         else ->
                                             Try.failure(
                                                 OpeningError.CannotRender(
@@ -314,7 +318,7 @@ class EpubReaderFragment : VisualReaderFragment() {
                                             )
                                     }
 
-                                    Timber.d(audioPublication.toString())
+                                    Timber.d(readerInitData.toString())
 //
 //
 //
