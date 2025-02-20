@@ -115,10 +115,10 @@ class ReaderRepository(
                 openAudio(bookId, publication, initialLocator)
             publication.conformsTo(Publication.Profile.EPUB) || publication.readingOrder.allAreHtml ->
                 openEpub(bookId, publication, initialLocator)
-            publication.conformsTo(Publication.Profile.PDF) ->
-                openPdf(bookId, publication, initialLocator)
-            publication.conformsTo(Publication.Profile.DIVINA) ->
-                openImage(bookId, publication, initialLocator)
+//            publication.conformsTo(Publication.Profile.PDF) ->
+//                openPdf(bookId, publication, initialLocator)
+//            publication.conformsTo(Publication.Profile.DIVINA) ->
+//                openImage(bookId, publication, initialLocator)
             else ->
                 Try.failure(
                     OpeningError.CannotRender(
