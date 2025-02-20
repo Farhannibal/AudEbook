@@ -36,6 +36,7 @@ import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.epub.pageList
 import com.example.audebook.LITERATA
 import com.example.audebook.R
+import com.example.audebook.domain.ImportError
 import com.example.audebook.reader.preferences.UserPreferencesViewModel
 import com.example.audebook.search.SearchFragment
 import org.readium.r2.navigator.VisualNavigator
@@ -43,6 +44,8 @@ import org.readium.r2.shared.publication.services.content.content
 import timber.log.Timber
 
 import info.debatty.java.stringsimilarity.JaroWinkler
+import org.readium.navigator.media.common.TimeBasedMediaNavigator
+import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.content.ContentTokenizer
 
 import kotlin.random.Random
@@ -54,10 +57,19 @@ import org.readium.r2.shared.util.tokenizer.Tokenizer
 import org.readium.r2.shared.util.Language
 import java.util.Locale
 
+import com.example.audebook.Readium
+import com.example.audebook.domain.PublicationError
+import com.example.audebook.domain.PublicationError.Companion.invoke
+import org.readium.r2.shared.util.Try
+import org.readium.r2.shared.util.getOrElse
+
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment() {
 
     override lateinit var navigator: EpubNavigatorFragment
+
+    lateinit var audioNavigator: TimeBasedMediaNavigator<*, *, *>
+    lateinit var audioPublication: Publication
 
     private lateinit var menuSearch: MenuItem
     lateinit var menuSearchView: SearchView
@@ -73,6 +85,33 @@ class EpubReaderFragment : VisualReaderFragment() {
         if (savedInstanceState != null) {
             isSearchViewIconified = savedInstanceState.getBoolean(IS_SEARCH_VIEW_ICONIFIED)
         }
+
+        val readium = Readium(this)
+        val asset = readium.assetRetriever.retrieve(
+            book.url,
+            book.mediaType
+        )
+//            .getOrElse {
+//            return Try.failure(
+//                OpeningError.PublicationError(
+//                    PublicationError(it)
+//                )
+//            )
+//        }
+
+        val audioPublication = readium.publicationOpener.open(
+            asset,
+            allowUserInteraction = true
+        )
+//            .getOrElse {
+//            return Try.failure(
+//                OpeningError.PublicationError(
+//                    PublicationError(it)
+//                )
+//            )
+//        }
+//        audioNavigator
+
 
         locators = mutableListOf()
         locatorMap = mutableMapOf()
@@ -301,6 +340,8 @@ class EpubReaderFragment : VisualReaderFragment() {
                             }
 
                             Timber.d(locators.toString())
+
+                            binding.audioOverlayText
 
 //                                    fun getCloseMatches(
 //                                        word: String,
