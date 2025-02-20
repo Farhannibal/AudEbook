@@ -58,6 +58,7 @@ import org.readium.r2.shared.util.Language
 import java.util.Locale
 
 import com.example.audebook.Readium
+import com.example.audebook.Application
 import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationError.Companion.invoke
 import org.readium.r2.shared.util.Try
@@ -67,6 +68,8 @@ import org.readium.r2.shared.util.getOrElse
 class EpubReaderFragment : VisualReaderFragment() {
 
     override lateinit var navigator: EpubNavigatorFragment
+
+    private lateinit var readium: Readium
 
     lateinit var audioNavigator: TimeBasedMediaNavigator<*, *, *>
     lateinit var audioPublication: Publication
@@ -86,23 +89,24 @@ class EpubReaderFragment : VisualReaderFragment() {
             isSearchViewIconified = savedInstanceState.getBoolean(IS_SEARCH_VIEW_ICONIFIED)
         }
 
-        val readium = Readium(this)
-        val asset = readium.assetRetriever.retrieve(
-            book.url,
-            book.mediaType
-        )
-//            .getOrElse {
-//            return Try.failure(
-//                OpeningError.PublicationError(
-//                    PublicationError(it)
-//                )
-//            )
-//        }
-
-        val audioPublication = readium.publicationOpener.open(
-            asset,
-            allowUserInteraction = true
-        )
+//        val application = requireActivity().application as Application
+//        readium = application.readium
+//        val asset = readium.assetRetriever.retrieve(
+//            book.url,
+//            book.mediaType
+//        )
+////            .getOrElse {
+////            return Try.failure(
+////                OpeningError.PublicationError(
+////                    PublicationError(it)
+////                )
+////            )
+////        }
+//
+//        val audioPublication = readium.publicationOpener.open(
+//            asset,
+//            allowUserInteraction = true
+//        )
 //            .getOrElse {
 //            return Try.failure(
 //                OpeningError.PublicationError(
