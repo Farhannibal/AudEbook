@@ -61,7 +61,14 @@ import com.example.audebook.Readium
 import com.example.audebook.Application
 import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationError.Companion.invoke
+import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
+import org.readium.adapter.exoplayer.audio.ExoPlayerEngineProvider
+import org.readium.navigator.media.audio.AudioNavigatorFactory
+import org.readium.navigator.media.audio.AudioNavigatorFactory.Companion.invoke
+import org.readium.r2.shared.publication.allAreHtml
+import org.readium.r2.shared.util.DebugError
 import org.readium.r2.shared.util.Try
+import org.readium.r2.shared.util.asset.Asset
 import org.readium.r2.shared.util.getOrElse
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -84,25 +91,30 @@ class EpubReaderFragment : VisualReaderFragment() {
     private lateinit var locators: MutableList<Locator>
     private lateinit var locatorMap: MutableMap<Locator, Boolean>
 
+    private lateinit var application: Application
+
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
             isSearchViewIconified = savedInstanceState.getBoolean(IS_SEARCH_VIEW_ICONIFIED)
         }
 
-//        val application = requireActivity().application as Application
-//        readium = application.readium
+        application = requireActivity().application as Application
+        readium = application.readium
+//        coroutineQueue.await { audioPublication = application.readerRepository.open(1) }
 //        val asset = readium.assetRetriever.retrieve(
 //            book.url,
 //            book.mediaType
 //        )
-////            .getOrElse {
-////            return Try.failure(
-////                OpeningError.PublicationError(
-////                    PublicationError(it)
-////                )
-////            )
-////        }
-//
+//            .getOrElse {
+//            return Try.failure(
+//                OpeningError.PublicationError(
+//                    PublicationError(it)
+//                )
+//            )
+//        }
+
+
+
 //        val audioPublication = readium.publicationOpener.open(
 //            asset,
 //            allowUserInteraction = true
@@ -256,13 +268,6 @@ class EpubReaderFragment : VisualReaderFragment() {
                         }
                         R.id.debugButton -> {
 
-//                            navigator.applyDecorations(
-//                                listOf(Decoration(
-////                                    locator = location.utteranceLocator,
-//                                    style = Decoration.Style.Highlight(tint = Color.RED)
-//                                )),
-//                                "highlight"
-//                            )
 
                             viewLifecycleOwner.lifecycleScope.launch {
                                 viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -274,7 +279,42 @@ class EpubReaderFragment : VisualReaderFragment() {
                                     )
                                     val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
                                     val content = publication.content(start)
-//                        val start2 = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+
+                                    val book = checkNotNull(application.bookRepository.get(2))
+                                    val asset = readium.assetRetriever.retrieve(
+                                        book.url,
+                                        book.mediaType
+                                    ).getOrElse {
+                                        return@getOrElse Try.failure(
+                                            OpeningError.PublicationError(
+                                                PublicationError(it)
+                                            )
+                                        )
+                                    }
+
+                                    val audioPublication = readium.publicationOpener.open(
+                                        asset as Asset,
+                                        allowUserInteraction = true
+                                    ).getOrElse {
+                                        return@getOrElse Try.failure(
+                                            OpeningError.PublicationError(
+                                                PublicationError(it)
+                                            )
+                                        )
+                                    }
+
+                                    val readerInitData = when {
+                                        publication.conformsTo(Publication.Profile.AUDIOBOOK) ->
+                                            openAudio(bookId, publication, initialLocator)
+                                        else ->
+                                            Try.failure(
+                                                OpeningError.CannotRender(
+                                                    DebugError("No navigator supports this publication.")
+                                                )
+                                            )
+                                    }
+
+                                    Timber.d(audioPublication.toString())
 //
 //
 //
@@ -479,6 +519,50 @@ class EpubReaderFragment : VisualReaderFragment() {
         private const val NAVIGATOR_FRAGMENT_TAG = "navigator"
         private const val IS_SEARCH_VIEW_ICONIFIED = "isSearchViewIconified"
     }
+
+    @OptIn(ExperimentalReadiumApi::class)
+    private suspend fun openAudio(
+        bookId: Long,
+        publication: Publication,
+        initialLocator: Locator?
+    ): Try<MediaReaderInitData, OpeningError> {
+        val preferencesManager = ExoPlayerPreferencesManagerFactory(preferencesDataStore)
+            .createPreferenceManager(bookId)
+        val initialPreferences = preferencesManager.preferences.value
+
+        val navigatorFactory = AudioNavigatorFactory(
+            publication,
+            ExoPlayerEngineProvider(application)
+        ) ?: return Try.failure(
+            OpeningError.CannotRender(
+                DebugError("Cannot create audio navigator factory.")
+            )
+        )
+
+        val navigator = navigatorFactory.createNavigator(
+            initialLocator,
+            initialPreferences
+        ).getOrElse {
+            return Try.failure(
+                when (it) {
+                    is AudioNavigatorFactory.Error.EngineInitialization ->
+                        OpeningError.AudioEngineInitialization(it)
+                    is AudioNavigatorFactory.Error.UnsupportedPublication ->
+                        OpeningError.CannotRender(it)
+                }
+            )
+        }
+
+        val initData = MediaReaderInitData(
+            bookId,
+            publication,
+            navigator,
+            preferencesManager,
+            navigatorFactory
+        )
+        return Try.success(initData)
+    }
+
 }
 
 // Examples of HTML templates for custom Decoration Styles.
@@ -553,3 +637,4 @@ private fun pageNumberTemplate(): HtmlDecorationTemplate {
             """
     )
 }
+
