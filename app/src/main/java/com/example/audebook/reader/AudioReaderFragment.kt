@@ -100,21 +100,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 
         val mediaPlayerTest = publication.get(publication.readingOrder[0].url())
 
-        Timber.d("List of Audio Clips:  " + mediaPlayerTest!!.sourceUrl.toString() + " "
-//        + readerData.publication.readingOrder[0].url().path + " "
-//                + readerData.publication.readingOrder[0].url().fragment + " "
-//                + readerData.publication.readingOrder[0].url().extension + " "
-//                + readerData.publication.readingOrder[0].url().filename + " "
-//                + readerData.publication.readingOrder[0].url().toUri().query + " "
-//                + readerData.mediaNavigator.asMedia3Player().toString() + " "
-        )
-
-//        val selectedTfliteFile = "getWhisperModelFile()"
-//        val vocabFile = "getVocabFilters()"
-
-//        val sdcardDataFolder = withContext(Dispatchers.IO) {
-//            context?.getExternalFilesDir(null)
-//        }
+        Timber.d("List of Audio Clips:  " + mediaPlayerTest!!.sourceUrl.toString() + " ")
 
         context?.let { ctx ->
             lifecycleScope.launch(Dispatchers.IO) {

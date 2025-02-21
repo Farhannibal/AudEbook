@@ -6,9 +6,12 @@
 
 package com.example.audebook.reader
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.AssetManager
 import android.graphics.Color
 import android.os.Bundle
+import android.text.format.DateUtils
 import android.view.*
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
@@ -17,12 +20,16 @@ import androidx.appcompat.widget.SearchView
 import androidx.core.os.BundleCompat
 import androidx.core.view.MenuHost
 import androidx.core.view.MenuProvider
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.fragment.app.FragmentResultListener
 import androidx.fragment.app.commit
 import androidx.fragment.app.commitNow
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
@@ -59,18 +66,43 @@ import java.util.Locale
 
 import com.example.audebook.Readium
 import com.example.audebook.Application
+import com.example.audebook.asr.Whisper
+import com.example.audebook.bookshelf.BookshelfViewModel.Event
 import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationError.Companion.invoke
+import com.example.audebook.domain.toUserError
 import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
+import com.example.audebook.utils.EventChannel
+import com.example.audebook.utils.UserError
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import org.json.JSONObject
+import org.readium.adapter.exoplayer.audio.ExoPlayerEngine
 import org.readium.adapter.exoplayer.audio.ExoPlayerEngineProvider
+import org.readium.adapter.exoplayer.audio.ExoPlayerNavigator
+import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
+import org.readium.adapter.exoplayer.audio.ExoPlayerSettings
+import org.readium.navigator.media.audio.AudioNavigator
 import org.readium.navigator.media.audio.AudioNavigatorFactory
 import org.readium.navigator.media.audio.AudioNavigatorFactory.Companion.invoke
+import org.readium.navigator.media.common.MediaNavigator
 import org.readium.r2.shared.publication.allAreHtml
 import org.readium.r2.shared.util.DebugError
 import org.readium.r2.shared.util.Try
 import org.readium.r2.shared.util.asset.Asset
 import org.readium.r2.shared.util.getOrElse
+import kotlin.time.Duration
+import kotlin.time.DurationUnit
+
+
+import com.arthenica.ffmpegkit.FFmpegKit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment() {
@@ -79,7 +111,8 @@ class EpubReaderFragment : VisualReaderFragment() {
 
     private lateinit var readium: Readium
 
-    lateinit var audioNavigator: TimeBasedMediaNavigator<*, *, *>
+//    lateinit var audioNavigator: TimeBasedMediaNavigator<*, *, *>
+    lateinit var audioNavigator: AudioNavigator<*, *>
     lateinit var audioPublication: Publication
 
     private lateinit var menuSearch: MenuItem
@@ -94,40 +127,96 @@ class EpubReaderFragment : VisualReaderFragment() {
 
     private lateinit var application: Application
 
+    private lateinit var navigatorPreferences: DataStore<Preferences>
+
+//    private val Context.navigatorPreferences: DataStore<Preferences>
+//            by preferencesDataStore(name = "navigator-preferences")
+
+    private var seekingItem: Int? = null
+
+    // whisper-tiny.tflite and whisper-base-nooptim.en.tflite works well
+    private val DEFAULT_MODEL_TO_USE = "whisper-tiny.tflite"
+    // English only model ends with extension ".en.tflite"
+    private val ENGLISH_ONLY_MODEL_EXTENSION = ".en.tflite"
+    private val ENGLISH_ONLY_VOCAB_FILE = "filters_vocab_en.bin"
+    private val MULTILINGUAL_VOCAB_FILE = "filters_vocab_multilingual.bin"
+    private val EXTENSIONS_TO_COPY = arrayOf("tflite", "bin", "wav", "pcm")
+
+    private var startTime: Long = 0
+
+    private var mWhisper: Whisper? = null
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
             isSearchViewIconified = savedInstanceState.getBoolean(IS_SEARCH_VIEW_ICONIFIED)
         }
 
         application = requireActivity().application as Application
+//        navigatorPreferences = application.navigatorPreferences
         readium = application.readium
-//        coroutineQueue.await { audioPublication = application.readerRepository.open(1) }
-//        val asset = readium.assetRetriever.retrieve(
-//            book.url,
-//            book.mediaType
-//        )
-//            .getOrElse {
-//            return Try.failure(
-//                OpeningError.PublicationError(
-//                    PublicationError(it)
-//                )
-//            )
-//        }
+
+        context?.let { ctx ->
+            lifecycleScope.launch(Dispatchers.IO) {
+                val sdcardDataFolder = ctx.getExternalFilesDir(null)
+                if (sdcardDataFolder != null) {
+                    copyAssetsToSdcard(ctx, sdcardDataFolder, EXTENSIONS_TO_COPY)
+                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-base.en.tflite")
+//                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-tiny.en.tflite")
+                    val vocabFile = File(sdcardDataFolder, "filters_vocab_en.bin")
+
+                    withContext(Dispatchers.Main) {
+                        if (mWhisper == null) {
+                            mWhisper = Whisper(ctx)
+                            mWhisper?.loadModel(selectedTfliteFile, vocabFile, false)
+
+                            mWhisper?.setListener(object : Whisper.WhisperListener {
+                                override fun onUpdateReceived(message: String) {
+                                    Timber.d("Update is received, Message: $message");
+
+                                    when (message) {
+                                        Whisper.MSG_PROCESSING -> {
+//                                    handler.post { binding.tvStatus.text = message }
+//                                    handler.post { binding.tvResult.text = "" }
+                                            startTime = System.currentTimeMillis()
+                                        }
+
+                                        Whisper.MSG_PROCESSING_DONE -> {
+                                            // handler.post { binding.tvStatus.text = message }
+                                            // for testing
+//                                    if (loopTesting) {
+//                                        transcriptionSync.sendSignal()
+//                                    }
+                                        }
+
+                                        Whisper.MSG_FILE_NOT_FOUND -> {
+//                                    handler.post { binding.tvStatus.text = message }
+                                            Timber.d("File not found error...!")
+                                        }
+                                    }
+                                }
+
+                                override fun onResultReceived(result: String) {
+                                    val timeTaken = System.currentTimeMillis() - startTime
+//                            handler.post { binding.tvStatus.text = "Processing done in ${timeTaken}ms" }
+
+                                    binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
+
+                                    Timber.d("Result: $result")
+                                    Timber.d("timeTaken: $timeTaken ms")
+//                            handler.post { binding.tvResult.append(result) }
+                                }
+                            })
+
+                            Timber.d("Loaded Model");
+                        }
+                    }
+                }
+            }
+
+        }
 
 
-
-//        val audioPublication = readium.publicationOpener.open(
-//            asset,
-//            allowUserInteraction = true
-//        )
-//            .getOrElse {
-//            return Try.failure(
-//                OpeningError.PublicationError(
-//                    PublicationError(it)
-//                )
-//            )
-//        }
-//        audioNavigator
 
 
         locators = mutableListOf()
@@ -225,6 +314,20 @@ class EpubReaderFragment : VisualReaderFragment() {
         return view
     }
 
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onStart() {
+        super.onStart()
+        binding.timelineBar.setOnTouchListener(this::forbidUserSeeking)
+//        binding.timelineBar.setOnSeekBarChangeListener(this)
+        binding.playPause.setOnClickListener(this::onPlayPause)
+        binding.skipForward.setOnClickListener(this::onSkipForward)
+        binding.skipBackward.setOnClickListener(this::onSkipBackward)
+
+//        binding.transcribe.setOnClickListener(this::onTranscribe)
+//        binding.transcribe.setOnClickListener(this::onExtractAndTranscribe)
+        binding.loadAudioBook.setOnClickListener { this::onLoadAudioBook }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -281,7 +384,9 @@ class EpubReaderFragment : VisualReaderFragment() {
                                     val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
                                     val content = publication.content(start)
 
-                                    val book = checkNotNull(application.bookRepository.get(2))
+                                    val bookId = 2L
+
+                                    val book = checkNotNull(application.bookRepository.get(bookId))
                                     val asset = readium.assetRetriever.retrieve(
                                         book.url,
                                         book.mediaType
@@ -307,9 +412,11 @@ class EpubReaderFragment : VisualReaderFragment() {
                                     val initialLocator = book.progression
                                         ?.let { Locator.fromJSON(JSONObject(it)) }
 
+//                                    val audioNavigator
+
                                     val readerInitData = when {
                                         (audioPublication as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
-                                            openAudio(2, audioPublication, initialLocator)
+                                            openAudio(bookId, audioPublication, initialLocator)
                                         else ->
                                             Try.failure(
                                                 OpeningError.CannotRender(
@@ -318,12 +425,15 @@ class EpubReaderFragment : VisualReaderFragment() {
                                             )
                                     }
 
-                                    Timber.d(readerInitData.toString())
-//
-//
-//
-//                                    TODODODOODODODODODOODODO
-//
+                                    audioNavigator = readerInitData.getOrNull()!!
+
+//                                    Timber.d(readerInitData.toString())
+                                    audioNavigator.play()
+                                    audioNavigator.playback
+                                        .onEach { onPlaybackChanged(it) }
+                                        .launchIn(viewLifecycleOwner.lifecycleScope)
+
+
                                     val tokenizer = DefaultTextContentTokenizer(unit = TextUnit.Sentence, language = Language(Locale.ENGLISH))
                                     val publicati = publication.content(start)
 //                                    val wholeText = content?.text()
@@ -524,15 +634,16 @@ class EpubReaderFragment : VisualReaderFragment() {
         private const val IS_SEARCH_VIEW_ICONIFIED = "isSearchViewIconified"
     }
 
-    @OptIn(ExperimentalReadiumApi::class)
     private suspend fun openAudio(
         bookId: Long,
         publication: Publication,
         initialLocator: Locator?
-    ): Try<MediaReaderInitData, OpeningError> {
-        val preferencesManager = ExoPlayerPreferencesManagerFactory(preferencesDataStore)
-            .createPreferenceManager(bookId)
-        val initialPreferences = preferencesManager.preferences.value
+    ): Try<AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>, OpeningError> {
+
+
+//        val preferencesManager = ExoPlayerPreferencesManagerFactory(preferencesDataStore(name = "navigator-preferences"))
+//            .createPreferenceManager(bookId)
+//        val initialPreferences = preferencesManager.preferences.value
 
         val navigatorFactory = AudioNavigatorFactory(
             publication,
@@ -545,7 +656,7 @@ class EpubReaderFragment : VisualReaderFragment() {
 
         val navigator = navigatorFactory.createNavigator(
             initialLocator,
-            initialPreferences
+//            initialPreferences
         ).getOrElse {
             return Try.failure(
                 when (it) {
@@ -557,14 +668,228 @@ class EpubReaderFragment : VisualReaderFragment() {
             )
         }
 
-        val initData = MediaReaderInitData(
-            bookId,
-            publication,
-            navigator,
-            preferencesManager,
-            navigatorFactory
+//        val initData = MediaReaderInitData(
+//            bookId,
+//            publication,
+//            navigator,
+//            preferencesManager,
+//            navigatorFactory
+//        )
+        return Try.success(navigator)
+    }
+
+    private fun onPlaybackChanged(
+        playback: TimeBasedMediaNavigator.Playback
+    ) {
+        Timber.v("onPlaybackChanged $playback")
+        val failureState = playback.state as? AudioNavigator.State.Failure<*>
+        if (failureState != null) {
+            val error = failureState.error as ExoPlayerEngine.Error
+            onPlayerError(error)
+            return
+        }
+
+        binding.playPause.isEnabled = true
+        binding.timelineBar.isEnabled = true
+        binding.timelineDuration.isEnabled = true
+        binding.timelinePosition.isEnabled = true
+        binding.playPause.setImageResource(
+            if (playback.playWhenReady) {
+                R.drawable.ic_baseline_pause_24
+            } else {
+                R.drawable.ic_baseline_play_arrow_24
+            }
         )
-        return Try.success(initData)
+
+        if (seekingItem == null) {
+            updateTimeline(playback)
+        }
+
+        if (playback.playWhenReady == true){
+
+//            Timber.d("onPlaybackChanged $playback")
+            transcribeAudio()
+        }
+    }
+
+    private fun updateTimeline(
+        playback: TimeBasedMediaNavigator.Playback
+    ) {
+        val currentItem = audioNavigator.readingOrder.items[playback.index]
+        binding.timelineBar.max = currentItem.duration?.inWholeSeconds?.toInt() ?: 0
+        binding.timelineDuration.text = currentItem.duration?.formatElapsedTime()
+        binding.timelineBar.progress = playback.offset.inWholeSeconds.toInt()
+        binding.timelinePosition.text = playback.offset.formatElapsedTime()
+        binding.timelineBar.secondaryProgress = playback.buffered?.inWholeSeconds?.toInt() ?: 0
+    }
+
+    private fun onPlayerError(error: ExoPlayerEngine.Error) {
+        binding.playPause.isEnabled = false
+        binding.timelineBar.isEnabled = false
+        binding.timelinePosition.isEnabled = false
+        binding.timelineDuration.isEnabled = false
+        val userError = when (error) {
+            is ExoPlayerEngine.Error.Engine ->
+                UserError(error.message, error)
+            is ExoPlayerEngine.Error.Source ->
+                error.cause.toUserError()
+        }
+        userError.show(requireActivity())
+    }
+
+    private fun Duration.formatElapsedTime(): String =
+        DateUtils.formatElapsedTime(toLong(DurationUnit.SECONDS))
+
+    private fun onPlayPause(@Suppress("UNUSED_PARAMETER") view: View) {
+        return when (audioNavigator.playback.value.state) {
+            is MediaNavigator.State.Ready, is MediaNavigator.State.Buffering -> {
+                model.viewModelScope.launch {
+                    if (audioNavigator.playback.value.playWhenReady) {
+                        audioNavigator.pause()
+                    } else {
+                        audioNavigator.play()
+                    }
+                }
+                Unit
+            }
+            is MediaNavigator.State.Ended -> {
+                model.viewModelScope.launch {
+                    audioNavigator.skipTo(0, Duration.ZERO)
+                    audioNavigator.play()
+                }
+                Unit
+            }
+            is MediaNavigator.State.Failure -> {
+                // Do nothing.
+            }
+        }
+    }
+
+    private fun onSkipForward(@Suppress("UNUSED_PARAMETER") view: View) {
+        model.viewModelScope.launch {
+            audioNavigator.skipForward()
+        }
+    }
+
+    private fun onSkipBackward(@Suppress("UNUSED_PARAMETER") view: View) {
+        model.viewModelScope.launch {
+            audioNavigator.skipBackward()
+        }
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    private fun forbidUserSeeking(view: View, event: MotionEvent): Boolean =
+        audioNavigator.playback.value.state is MediaNavigator.State.Ended
+
+    private fun onLoadAudioBook(@Suppress("UNUSED_PARAMETER") view: View) {
+        model.viewModelScope.launch {
+//            audioNavigator.skipBackward()
+            Timber.d("Load Audio Book")
+        }
+    }
+
+    private suspend fun copyAssetsToSdcard(context: Context, destFolder: File, extensions: Array<String>) {
+        val assetManager: AssetManager = context.assets
+
+        try {
+            // List all files in the assets folder once
+            val assetFiles: Array<String> = withContext(Dispatchers.IO) {
+                assetManager.list("") ?: return@withContext emptyArray()
+            }
+
+            for (assetFileName in assetFiles) {
+                // Check if file matches any of the provided extensions
+                for (extension in extensions) {
+                    if (assetFileName.endsWith(".$extension")) {
+                        val outFile = File(destFolder, assetFileName)
+
+                        // Skip if file already exists
+                        if (withContext(Dispatchers.IO) { outFile.exists() }) break
+
+                        // Copy the file from assets to the destination folder
+                        withContext(Dispatchers.IO) {
+                            assetManager.open(assetFileName).use { inputStream ->
+                                FileOutputStream(outFile).use { outputStream ->
+                                    val buffer = ByteArray(1024)
+                                    var bytesRead: Int
+                                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                                        outputStream.write(buffer, 0, bytesRead)
+                                    }
+                                }
+                            }
+                        }
+                        break // No need to check further extensions
+                    }
+                }
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun transcribeAudio() {
+        model.viewModelScope.launch {
+            if (mWhisper?.isInProgress() == false) {
+                val sdcardDataFolder = withContext(Dispatchers.IO) {
+                    context?.getExternalFilesDir(null)
+                }
+
+                if (sdcardDataFolder != null) {
+
+                    Timber.d(audioNavigator.readingOrder.items[0].toString())
+
+                    val inputFilePath =
+                        publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()
+                    val inputFileType = inputFilePath.substringAfterLast('.', "")
+                    val outputFilePath =
+                        sdcardDataFolder.absolutePath + "/extracted_segment.m4a"
+                    val timestamp = binding.timelinePosition.text.toString()
+                    val duration = 15
+
+                    val startTimeInSeconds = convertTimestampToSeconds(timestamp)
+                    val startTimeFormatted = String.format(
+                        "%02d:%02d:%02d",
+                        startTimeInSeconds / 3600,
+                        (startTimeInSeconds % 3600) / 60,
+                        startTimeInSeconds % 60
+                    )
+
+                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
+
+                    mWhisper?.apply {
+                        setFilePath(outputFilePath + ".wav")
+                        Timber.d(outputFilePath + ".wav")
+                        setAction(Whisper.ACTION_TRANSCRIBE)
+                        start()
+                    }
+                }
+            } else {
+                Timber.d("Whisper is already in progress...!")
+            }
+        }
+    }
+
+    private suspend fun extractAudioSegment(
+        inputFilePath: String,
+        outputFilePath: String,
+        startTime: String,
+        duration: Int
+    ) {
+        withContext(Dispatchers.IO) {
+            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i $inputFilePath  -t $duration -c copy $outputFilePath"
+            Timber.d(command)
+            FFmpegKit.execute(command)
+
+            if (!outputFilePath.endsWith(".wav")){
+                val convertCommand = "-y -i $outputFilePath $outputFilePath.wav"
+                FFmpegKit.execute(convertCommand)
+            }
+        }
+    }
+
+    private fun convertTimestampToSeconds(timestamp: String): Int {
+        val parts = timestamp.split(":").map { it.toInt() }
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
     }
 
 }
