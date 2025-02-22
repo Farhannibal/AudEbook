@@ -12,8 +12,8 @@ import androidx.room.PrimaryKey
 import org.readium.r2.shared.util.AbsoluteUrl
 import org.readium.r2.shared.util.mediatype.MediaType
 
-@Entity(tableName = Book.TABLE_NAME)
-data class Book(
+@Entity(tableName = AudioBook.TABLE_NAME)
+data class AudioBook(
     @PrimaryKey
     @ColumnInfo(name = ID)
     var id: Long? = null,
@@ -64,7 +64,7 @@ data class Book(
 
     companion object {
 
-        const val TABLE_NAME = "books"
+        const val TABLE_NAME = "audiobooks"
         const val ID = "id"
         const val CREATION_DATE = "creation_date"
         const val HREF = "href"

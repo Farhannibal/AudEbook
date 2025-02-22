@@ -13,6 +13,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 import com.example.audebook.data.model.Book
+import com.example.audebook.data.model.AudioBook
 import com.example.audebook.data.model.Bookmark
 import com.example.audebook.data.model.Highlight
 
@@ -26,6 +27,14 @@ interface BooksDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBook(book: Book): Long
+
+    /**
+     * Inserts a book
+     * @param book The book to insert
+     * @return ID of the book that was added (primary key)
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAudioBook(book: AudioBook): Long
 
     /**
      * Deletes a book

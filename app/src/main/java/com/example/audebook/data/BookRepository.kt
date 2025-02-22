@@ -17,6 +17,7 @@ import org.readium.r2.shared.util.Url
 import org.readium.r2.shared.util.mediatype.MediaType
 import com.example.audebook.data.db.BooksDao
 import com.example.audebook.data.model.Book
+import com.example.audebook.data.model.AudioBook
 import com.example.audebook.data.model.Bookmark
 import com.example.audebook.data.model.Highlight
 import com.example.audebook.utils.extensions.readium.authorName
@@ -98,6 +99,30 @@ class BookRepository(
         Timber.d("FileTest "+ url.toString())
 
         return booksDao.insertBook(book)
+    }
+
+    suspend fun insertAudioBook(
+        url: Url,
+        mediaType: MediaType,
+        publication: Publication,
+        cover: File,
+        id: Long
+    ): Long {
+        val book = AudioBook(
+            id = id,
+            creation = DateTime().toDate().time,
+            title = publication.metadata.title ?: url.filename,
+            author = publication.metadata.authorName,
+            href = url.toString(),
+            identifier = publication.metadata.identifier ?: "",
+            mediaType = mediaType,
+            progression = "{}",
+            cover = cover.path
+        )
+
+        Timber.d("FileTest "+ url.toString())
+
+        return booksDao.insertAudioBook(book)
     }
 
     suspend fun deleteBook(id: Long) =
