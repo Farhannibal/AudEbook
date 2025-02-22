@@ -778,8 +778,13 @@ class EpubReaderFragment : VisualReaderFragment() {
     }
 
     @Suppress("UNUSED_PARAMETER")
-    private fun forbidUserSeeking(view: View, event: MotionEvent): Boolean =
-        audioNavigator.playback.value.state is MediaNavigator.State.Ended
+    private fun forbidUserSeeking(view: View, event: MotionEvent): Boolean {
+        // Check if audioNavigator is initialized
+        if (!::audioNavigator.isInitialized) {
+            return false
+        }
+        return audioNavigator.playback.value.state is MediaNavigator.State.Ended
+    }
 
     private fun onLoadAudioBook(@Suppress("UNUSED_PARAMETER") view: View) {
         model.viewModelScope.launch {
@@ -888,7 +893,9 @@ class EpubReaderFragment : VisualReaderFragment() {
     }
 
     private fun convertTimestampToSeconds(timestamp: String): Int {
-        val parts = timestamp.split(":").map { it.toInt() }
+        var parts = timestamp.split(":").map { it.toInt() }
+        if (parts.size != 3)
+            parts = "00:00:00".split(":").map { it.toInt() }
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
     }
 
