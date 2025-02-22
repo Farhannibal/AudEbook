@@ -68,7 +68,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "database"
-                ).addMigrations(MIGRATION_1_2) // Apply the migration
+                )
+//                    .addMigrations(MIGRATION_1_2) // Apply the migration
+                    .fallbackToDestructiveMigration() // Allow for destructive migrations
                 .build()
                 INSTANCE = instance
                 return instance

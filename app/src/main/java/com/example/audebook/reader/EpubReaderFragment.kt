@@ -384,7 +384,7 @@ class EpubReaderFragment : VisualReaderFragment() {
                                     val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
                                     val content = publication.content(start)
 
-                                    val bookId = 2L
+                                    val bookId = 1L
 
                                     val book = checkNotNull(application.bookRepository.get(bookId))
                                     val asset = readium.assetRetriever.retrieve(

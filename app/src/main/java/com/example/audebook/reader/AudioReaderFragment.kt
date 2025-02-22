@@ -469,7 +469,10 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
     }
 
     private fun convertTimestampToSeconds(timestamp: String): Int {
-        val parts = timestamp.split(":").map { it.toInt() }
+        Timber.d(timestamp)
+        var parts = timestamp.split(":").map { it.toInt() }
+        if (parts.size != 3)
+            parts = "00:00:00".split(":").map { it.toInt() }
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
     }
 
