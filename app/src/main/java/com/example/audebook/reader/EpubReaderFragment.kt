@@ -156,6 +156,8 @@ class EpubReaderFragment : VisualReaderFragment() {
 //        navigatorPreferences = application.navigatorPreferences
         readium = application.readium
 
+
+
         context?.let { ctx ->
             lifecycleScope.launch(Dispatchers.IO) {
                 val sdcardDataFolder = ctx.getExternalFilesDir(null)
@@ -230,6 +232,10 @@ class EpubReaderFragment : VisualReaderFragment() {
             super.onCreate(savedInstanceState)
             requireActivity().finish()
             return
+        }
+
+        lifecycleScope.launch {
+            loadAudiobookNavigator(readerData.bookId)
         }
 
         childFragmentManager.fragmentFactory =
@@ -897,6 +903,62 @@ class EpubReaderFragment : VisualReaderFragment() {
         if (parts.size != 3)
             parts = "00:00:00".split(":").map { it.toInt() }
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    }
+
+    private suspend fun loadAudiobookNavigator(bookIdTest: Long){
+        Timber.d("BookIdTest: " +bookIdTest.toString())
+        val bookId = 1L
+
+
+
+        val book = checkNotNull(application.bookRepository.get(bookId))
+        val asset = readium.assetRetriever.retrieve(
+            book.url,
+            book.mediaType
+        ).getOrElse {
+            return@getOrElse Try.failure(
+                OpeningError.PublicationError(
+                    PublicationError(it)
+                )
+            )
+        }
+
+        val audioPublication = readium.publicationOpener.open(
+            asset as Asset,
+            allowUserInteraction = true
+        ).getOrElse {
+            return@getOrElse Try.failure(
+                OpeningError.PublicationError(
+                    PublicationError(it)
+                )
+            )
+        }
+
+        val initialLocator = book.progression
+            ?.let { Locator.fromJSON(JSONObject(it)) }
+
+//                                    val audioNavigator
+
+        val readerInitData = when {
+            (audioPublication as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
+                openAudio(bookId, audioPublication, initialLocator)
+            else ->
+                Try.failure(
+                    OpeningError.CannotRender(
+                        DebugError("No navigator supports this publication.")
+                    )
+                )
+        }
+
+        audioNavigator = readerInitData.getOrNull()!!
+
+//                                    Timber.d(readerInitData.toString())
+//        audioNavigator.play()
+        audioNavigator.playback
+            .onEach { onPlaybackChanged(it) }
+            .launchIn(viewLifecycleOwner.lifecycleScope)
+
+        binding.loadAudioBook.visibility = View.GONE
     }
 
 }
