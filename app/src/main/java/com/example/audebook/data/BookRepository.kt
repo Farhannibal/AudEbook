@@ -32,8 +32,13 @@ class BookRepository(
 
     suspend fun getAudiobook(id: Long) = booksDao.getAudiobook(id)
 
+    fun audiobooks(): Flow<List<AudioBook>> = booksDao.getAllAudiobooks()
+
     suspend fun saveProgression(locator: Locator, bookId: Long) =
         booksDao.saveProgression(locator.toJSON().toString(), bookId)
+
+    suspend fun saveAudiobookProgression(locator: Locator, bookId: Long) =
+        booksDao.saveAudiobookProgression(locator.toJSON().toString(), bookId)
 
     suspend fun insertBookmark(bookId: Long, publication: Publication, locator: Locator): Long {
         val resource = publication.readingOrder.indexOfFirstWithHref(locator.href)!!

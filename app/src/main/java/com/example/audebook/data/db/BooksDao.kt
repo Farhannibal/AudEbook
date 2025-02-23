@@ -63,6 +63,13 @@ interface BooksDao {
     fun getAllBooks(): Flow<List<Book>>
 
     /**
+     * Retrieve all books
+     * @return List of books as Flow
+     */
+    @Query("SELECT * FROM " + AudioBook.TABLE_NAME + " ORDER BY " + AudioBook.CREATION_DATE + " desc")
+    fun getAllAudiobooks(): Flow<List<AudioBook>>
+
+    /**
      * Retrieve all bookmarks for a specific book
      * @param bookId The ID of the book
      * @return List of bookmarks for the book as Flow
@@ -137,4 +144,14 @@ interface BooksDao {
         "UPDATE " + Book.TABLE_NAME + " SET " + Book.PROGRESSION + " = :locator WHERE " + Book.ID + "= :id"
     )
     suspend fun saveProgression(locator: String, id: Long)
+
+    /**
+     * Saves audiobook progression
+     * @param locator Location of the book
+     * @param id The book to update
+     */
+    @Query(
+        "UPDATE " + AudioBook.TABLE_NAME + " SET " + AudioBook.PROGRESSION + " = :locator WHERE " + AudioBook.ID + "= :id"
+    )
+    suspend fun saveAudiobookProgression(locator: String, id: Long)
 }

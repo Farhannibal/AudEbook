@@ -8,13 +8,17 @@ package com.example.audebook.reader
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.res.AssetManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.*
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.ColorInt
 import androidx.appcompat.widget.SearchView
 import androidx.core.os.BundleCompat
@@ -113,7 +117,10 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 import com.example.audebook.domain.CoverStorage
-
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.count
+import kotlinx.coroutines.flow.sample
 
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -160,6 +167,14 @@ class EpubReaderFragment : VisualReaderFragment() {
 
     private var epubBookId: Long = -1
 
+    private lateinit var appStoragePickerLauncher: ActivityResultLauncher<String>
+    private lateinit var sharedStoragePickerLauncher: ActivityResultLauncher<Array<String>>
+
+    private val coroutineScope: CoroutineScope =
+        MainScope()
+
+    private var lastSaveTime: Long = 0
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -170,7 +185,15 @@ class EpubReaderFragment : VisualReaderFragment() {
 //        navigatorPreferences = application.navigatorPreferences
         readium = application.readium
 
-
+        // Register for activity result here
+        sharedStoragePickerLauncher =
+            registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+                uri?.let {
+                    val takeFlags: Int = Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    requireContext().contentResolver.takePersistableUriPermission(uri, takeFlags)
+                    addPublicationFromStorage(it.toUrl()!! as AbsoluteUrl)
+                }
+            }
 
         context?.let { ctx ->
             lifecycleScope.launch(Dispatchers.IO) {
@@ -252,8 +275,9 @@ class EpubReaderFragment : VisualReaderFragment() {
 
         lifecycleScope.launch {
             try {
-                loadAudiobookNavigator(readerData.bookId)
+                loadAudiobookNavigator(epubBookId)
             } catch (e: Exception) {
+                Timber.d("")
                 Timber.e(e, "Failed to load audiobook navigator")
                 // Handle the exception, e.g., show an error message to the user
             }
@@ -740,6 +764,18 @@ class EpubReaderFragment : VisualReaderFragment() {
 //            Timber.d("onPlaybackChanged $playback")
             transcribeAudio()
         }
+
+
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastSaveTime >= 5000) { // 5 seconds
+            lastSaveTime = currentTime
+            model.viewModelScope.launch {
+                application.bookRepository.saveAudiobookProgression(
+                    audioNavigator.currentLocator.value,
+                    epubBookId
+                )
+            }
+        }
     }
 
     private fun updateTimeline(
@@ -820,6 +856,14 @@ class EpubReaderFragment : VisualReaderFragment() {
         model.viewModelScope.launch {
 //            audioNavigator.skipBackward()
             Timber.d("Load Audio Book")
+            sharedStoragePickerLauncher.launch(arrayOf("*/*"))
+
+//            try {
+//                loadAudiobookNavigator(epubBookId)
+//            } catch (e: Exception) {
+//                Timber.e(e, "Failed to load audiobook navigator")
+//                // Handle the exception, e.g., show an error message to the user
+//            }
         }
     }
 
@@ -933,11 +977,19 @@ class EpubReaderFragment : VisualReaderFragment() {
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
     }
 
-    private suspend fun loadAudiobookNavigator(bookIdTest: Long){
-        Timber.d("BookIdTest: " +bookIdTest.toString())
-        val bookId = 1L
+    private suspend fun loadAudiobookNavigator(bookId: Long){
+//        Timber.d("BookIdTest: " +bookIdTest.toString())
+//        val bookId = 1L
 
+        val allaudiobooks = application.bookRepository.audiobooks()
+        val allbooks = application.bookRepository.books()
+        allaudiobooks.onEach {
+                Timber.d(it.toString())
+            }
 
+//        Timber.d("BookIdTest Total Number of Audiobooks: " +allbooks.count().toString())
+//        Timber.d("BookIdTest Total Number of Audiobooks: " +allaudiobooks.count().toString())
+//        Timber.d("BookIdTest Total Number of Audiobooks: " +allaudiobooks.count().toString())
 
         val book = checkNotNull(application.bookRepository.getAudiobook(bookId))
         val asset = readium.assetRetriever.retrieve(
@@ -1063,7 +1115,21 @@ class EpubReaderFragment : VisualReaderFragment() {
                 )
             }
 
+        try {
+            loadAudiobookNavigator(epubBookId)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to load audiobook navigator")
+            // Handle the exception, e.g., show an error message to the user
+        }
         return Try.success(Unit)
+    }
+
+    fun addPublicationFromStorage(
+        url: AbsoluteUrl
+    ) {
+        coroutineScope.launch {
+            addBookFeedback(url)
+        }
     }
 
 }
