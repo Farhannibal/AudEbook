@@ -30,6 +30,8 @@ class BookRepository(
 
     suspend fun get(id: Long) = booksDao.get(id)
 
+    suspend fun getAudiobook(id: Long) = booksDao.getAudiobook(id)
+
     suspend fun saveProgression(locator: Locator, bookId: Long) =
         booksDao.saveProgression(locator.toJSON().toString(), bookId)
 
@@ -105,7 +107,7 @@ class BookRepository(
         url: Url,
         mediaType: MediaType,
         publication: Publication,
-        cover: File,
+//        cover: File,
         id: Long
     ): Long {
         val book = AudioBook(
@@ -117,7 +119,7 @@ class BookRepository(
             identifier = publication.metadata.identifier ?: "",
             mediaType = mediaType,
             progression = "{}",
-            cover = cover.path
+            cover = "cover.path"
         )
 
         Timber.d("FileTest "+ url.toString())

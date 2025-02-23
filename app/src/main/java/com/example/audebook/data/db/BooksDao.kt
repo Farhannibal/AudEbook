@@ -50,6 +50,12 @@ interface BooksDao {
     suspend fun get(id: Long): Book?
 
     /**
+     * Retrieve an audiobook from its ID.
+     */
+    @Query("SELECT * FROM " + AudioBook.TABLE_NAME + " WHERE " + AudioBook.ID + " = :id")
+    suspend fun getAudiobook(id: Long): AudioBook?
+
+    /**
      * Retrieve all books
      * @return List of books as Flow
      */

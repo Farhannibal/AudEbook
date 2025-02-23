@@ -97,12 +97,22 @@ import kotlin.time.DurationUnit
 
 
 import com.arthenica.ffmpegkit.FFmpegKit
+import com.example.audebook.domain.Bookshelf
+//import com.example.audebook.domain.PublicationError
+import com.example.audebook.domain.PublicationError.Companion.invoke
+import com.example.audebook.domain.PublicationRetriever
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.readium.r2.shared.util.AbsoluteUrl
+import org.readium.r2.shared.util.file.FileSystemError
+import org.readium.r2.shared.util.format.Format
+import org.readium.r2.shared.util.toUrl
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+
+import com.example.audebook.domain.CoverStorage
 
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment() {
@@ -145,6 +155,8 @@ class EpubReaderFragment : VisualReaderFragment() {
     private var startTime: Long = 0
 
     private var mWhisper: Whisper? = null
+
+    private var epubBookId: Long = -1
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -234,8 +246,15 @@ class EpubReaderFragment : VisualReaderFragment() {
             return
         }
 
+        epubBookId = readerData.bookId
+
         lifecycleScope.launch {
-            loadAudiobookNavigator(readerData.bookId)
+            try {
+                loadAudiobookNavigator(readerData.bookId)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to load audiobook navigator")
+                // Handle the exception, e.g., show an error message to the user
+            }
         }
 
         childFragmentManager.fragmentFactory =
@@ -331,7 +350,7 @@ class EpubReaderFragment : VisualReaderFragment() {
 
 //        binding.transcribe.setOnClickListener(this::onTranscribe)
 //        binding.transcribe.setOnClickListener(this::onExtractAndTranscribe)
-        binding.loadAudioBook.setOnClickListener { this::onLoadAudioBook }
+        binding.loadAudioBook.setOnClickListener(this::onLoadAudioBook )
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -438,6 +457,8 @@ class EpubReaderFragment : VisualReaderFragment() {
                                     audioNavigator.playback
                                         .onEach { onPlaybackChanged(it) }
                                         .launchIn(viewLifecycleOwner.lifecycleScope)
+
+                                    binding.loadAudioBook.visibility = View.GONE
 
 
                                     val tokenizer = DefaultTextContentTokenizer(unit = TextUnit.Sentence, language = Language(Locale.ENGLISH))
@@ -854,7 +875,9 @@ class EpubReaderFragment : VisualReaderFragment() {
                     val inputFileType = inputFilePath.substringAfterLast('.', "")
                     val outputFilePath =
                         sdcardDataFolder.absolutePath + "/extracted_segment.m4a"
-                    val timestamp = binding.timelinePosition.text.toString()
+                    val timestamp = withContext(Dispatchers.Main) {
+                        binding.timelinePosition.text.toString()
+                    }
                     val duration = 15
 
                     val startTimeInSeconds = convertTimestampToSeconds(timestamp)
@@ -864,6 +887,8 @@ class EpubReaderFragment : VisualReaderFragment() {
                         (startTimeInSeconds % 3600) / 60,
                         startTimeInSeconds % 60
                     )
+
+                    Timber.d(timestamp)
 
                     extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
 
@@ -911,7 +936,7 @@ class EpubReaderFragment : VisualReaderFragment() {
 
 
 
-        val book = checkNotNull(application.bookRepository.get(bookId))
+        val book = checkNotNull(application.bookRepository.getAudiobook(bookId))
         val asset = readium.assetRetriever.retrieve(
             book.url,
             book.mediaType
@@ -959,6 +984,83 @@ class EpubReaderFragment : VisualReaderFragment() {
             .launchIn(viewLifecycleOwner.lifecycleScope)
 
         binding.loadAudioBook.visibility = View.GONE
+    }
+
+    val channel: Channel<Bookshelf.Event> =
+        Channel(Channel.UNLIMITED)
+
+    private suspend fun addBookFeedback(
+        retrieverResult: Try<PublicationRetriever.Result, ImportError>
+    ) {
+        retrieverResult
+            .map { addBook(it.publication.toUrl(), it.format, it.coverUrl) }
+            .onSuccess { channel.send(Bookshelf.Event.ImportPublicationSuccess) }
+            .onFailure { channel.send(Bookshelf.Event.ImportPublicationError(it)) }
+    }
+
+    private suspend fun addBookFeedback(
+        url: AbsoluteUrl,
+        format: Format? = null,
+        coverUrl: AbsoluteUrl? = null
+    ) {
+        addBook(url, format, coverUrl)
+            .onSuccess { channel.send(Bookshelf.Event.ImportPublicationSuccess) }
+            .onFailure { channel.send(Bookshelf.Event.ImportPublicationError(it)) }
+    }
+
+    private suspend fun addBook(
+        url: AbsoluteUrl,
+        format: Format? = null,
+        coverUrl: AbsoluteUrl? = null
+    ): Try<Unit, ImportError> {
+        val asset =
+            if (format == null) {
+                readium.assetRetriever.retrieve(url)
+            } else {
+                readium.assetRetriever.retrieve(url, format)
+            }.getOrElse {
+                return Try.failure(
+                    ImportError.Publication(PublicationError(it))
+                )
+            }
+
+        readium.publicationOpener.open(
+            asset,
+            allowUserInteraction = false
+        ).onSuccess { audioPublication ->
+//            val coverFile =
+//                coverStorage.storeCover(publication, coverUrl)
+//                    .getOrElse {
+//                        return Try.failure(
+//                            ImportError.FileSystem(
+//                                FileSystemError.IO(it)
+//                            )
+//                        )
+//                    }
+
+            val id = application.bookRepository.insertAudioBook(
+                url,
+                asset.format.mediaType,
+                audioPublication,
+                epubBookId
+            )
+            if (id == -1L) {
+//                coverFile.delete()
+                return Try.failure(
+                    ImportError.Database(
+                        DebugError("Could not insert book into database.")
+                    )
+                )
+            }
+        }
+            .onFailure {
+                Timber.e("Cannot open publication: $it.")
+                return Try.failure(
+                    ImportError.Publication(PublicationError(it))
+                )
+            }
+
+        return Try.success(Unit)
     }
 
 }
