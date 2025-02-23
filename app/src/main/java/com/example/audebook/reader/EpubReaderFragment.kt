@@ -108,11 +108,13 @@ import org.readium.r2.shared.util.file.FileSystemError
 import org.readium.r2.shared.util.format.Format
 import org.readium.r2.shared.util.toUrl
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 import com.example.audebook.domain.CoverStorage
+
+
 
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment() {
@@ -123,7 +125,7 @@ class EpubReaderFragment : VisualReaderFragment() {
 
 //    lateinit var audioNavigator: TimeBasedMediaNavigator<*, *, *>
     lateinit var audioNavigator: AudioNavigator<*, *>
-    lateinit var audioPublication: Publication
+//    lateinit var audioPublication: Publication
 
     private lateinit var menuSearch: MenuItem
     lateinit var menuSearchView: SearchView
@@ -137,7 +139,7 @@ class EpubReaderFragment : VisualReaderFragment() {
 
     private lateinit var application: Application
 
-    private lateinit var navigatorPreferences: DataStore<Preferences>
+//    private lateinit var navigatorPreferences: DataStore<Preferences>
 
 //    private val Context.navigatorPreferences: DataStore<Preferences>
 //            by preferencesDataStore(name = "navigator-preferences")
@@ -145,11 +147,11 @@ class EpubReaderFragment : VisualReaderFragment() {
     private var seekingItem: Int? = null
 
     // whisper-tiny.tflite and whisper-base-nooptim.en.tflite works well
-    private val DEFAULT_MODEL_TO_USE = "whisper-tiny.tflite"
+//    private val DEFAULT_MODEL_TO_USE = "whisper-tiny.tflite"
     // English only model ends with extension ".en.tflite"
-    private val ENGLISH_ONLY_MODEL_EXTENSION = ".en.tflite"
-    private val ENGLISH_ONLY_VOCAB_FILE = "filters_vocab_en.bin"
-    private val MULTILINGUAL_VOCAB_FILE = "filters_vocab_multilingual.bin"
+//    private val ENGLISH_ONLY_MODEL_EXTENSION = ".en.tflite"
+//    private val ENGLISH_ONLY_VOCAB_FILE = "filters_vocab_en.bin"
+//    private val MULTILINGUAL_VOCAB_FILE = "filters_vocab_multilingual.bin"
     private val EXTENSIONS_TO_COPY = arrayOf("tflite", "bin", "wav", "pcm")
 
     private var startTime: Long = 0
@@ -333,6 +335,7 @@ class EpubReaderFragment : VisualReaderFragment() {
             }
         }
         navigator = childFragmentManager.findFragmentByTag(NAVIGATOR_FRAGMENT_TAG) as EpubNavigatorFragment
+
 
 //        navigator.currentLocator.value
 

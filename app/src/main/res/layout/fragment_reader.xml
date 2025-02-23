@@ -30,6 +30,8 @@
             style="@style/Widget.AppCompat.Button"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:scaleX="1.25"
+            android:scaleY="1.25"
             android:text="Load Audio Book"
             android:visibility="visible" />
 
