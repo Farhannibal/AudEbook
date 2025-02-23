@@ -17,6 +17,7 @@ import android.text.format.DateUtils
 import android.view.*
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
+import android.widget.SeekBar
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.ColorInt
@@ -121,10 +122,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.count
 import kotlinx.coroutines.flow.sample
+import kotlin.time.Duration.Companion.seconds
 
 
 @OptIn(ExperimentalReadiumApi::class)
-class EpubReaderFragment : VisualReaderFragment() {
+class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListener {
 
     override lateinit var navigator: EpubNavigatorFragment
 
@@ -370,7 +372,7 @@ class EpubReaderFragment : VisualReaderFragment() {
     override fun onStart() {
         super.onStart()
         binding.timelineBar.setOnTouchListener(this::forbidUserSeeking)
-//        binding.timelineBar.setOnSeekBarChangeListener(this)
+        binding.timelineBar.setOnSeekBarChangeListener(this)
         binding.playPause.setOnClickListener(this::onPlayPause)
         binding.skipForward.setOnClickListener(this::onSkipForward)
         binding.skipBackward.setOnClickListener(this::onSkipBackward)
@@ -831,6 +833,23 @@ class EpubReaderFragment : VisualReaderFragment() {
         }
     }
 
+    override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+        if (fromUser) {
+            binding.timelinePosition.text = progress.seconds.formatElapsedTime()
+        }
+    }
+
+    override fun onStartTrackingTouch(seekBar: SeekBar) {
+        Timber.d("onStartTrackingTouch")
+        seekingItem = audioNavigator.playback.value.index
+    }
+
+    override fun onStopTrackingTouch(seekBar: SeekBar) {
+        Timber.d("onStopTrackingTouch")
+        audioNavigator.skipTo(checkNotNull(seekingItem), seekBar.progress.seconds)
+        seekingItem = null
+    }
+
     private fun onSkipForward(@Suppress("UNUSED_PARAMETER") view: View) {
         model.viewModelScope.launch {
             audioNavigator.skipForward()
@@ -843,6 +862,13 @@ class EpubReaderFragment : VisualReaderFragment() {
         }
     }
 
+//    override fun go(locator: Locator, animated: Boolean) {
+//        model.viewModelScope.launch {
+//            audioNavigator.go(locator)
+//            audioNavigator.play()
+//        }
+//    }
+
     @Suppress("UNUSED_PARAMETER")
     private fun forbidUserSeeking(view: View, event: MotionEvent): Boolean {
         // Check if audioNavigator is initialized
@@ -851,6 +877,8 @@ class EpubReaderFragment : VisualReaderFragment() {
         }
         return audioNavigator.playback.value.state is MediaNavigator.State.Ended
     }
+
+
 
     private fun onLoadAudioBook(@Suppress("UNUSED_PARAMETER") view: View) {
         model.viewModelScope.launch {
