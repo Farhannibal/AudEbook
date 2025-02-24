@@ -127,6 +127,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
             addInputListener(object : InputListener {
                 override fun onTap(event: TapEvent): Boolean {
                     requireActivity().toggleSystemUi()
+                    toggleControlsPadding()
                     return true
                 }
             })
@@ -638,6 +639,22 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
         } else {
             container.clearPadding()
         }
+    }
+
+    private fun toggleControlsPadding() {
+        val controls = binding.controls
+        val currentPaddingBottom = controls.paddingBottom
+        val newPaddingBottom = if (currentPaddingBottom == 0) {
+            resources.getDimensionPixelSize(R.dimen.padding_40dp)
+        } else {
+            0
+        }
+        controls.setPadding(
+            controls.paddingLeft,
+            controls.paddingTop,
+            controls.paddingRight,
+            newPaddingBottom
+        )
     }
 }
 

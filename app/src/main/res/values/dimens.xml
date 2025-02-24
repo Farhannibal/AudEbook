@@ -1,3 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Other dimensions -->
+    <dimen name="padding_40dp">40dp</dimen>
 </resources>

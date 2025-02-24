@@ -1249,7 +1249,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         Timber.d(locators.toString())
 
-        binding.audioOverlayText
+//        binding.audioOverlayText
     }
 
     fun onReanchorTranscriptionLocator(@Suppress("UNUSED_PARAMETER") view: View) {
