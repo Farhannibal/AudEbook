@@ -377,7 +377,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         binding.skipForward.setOnClickListener(this::onSkipForward)
         binding.skipBackward.setOnClickListener(this::onSkipBackward)
 
-//        binding.transcribe.setOnClickListener(this::onTranscribe)
+        binding.transcribe.setOnClickListener(this::onReanchorTranscriptionLocator)
 //        binding.transcribe.setOnClickListener(this::onExtractAndTranscribe)
         binding.loadAudioBook.setOnClickListener(this::onLoadAudioBook )
     }
@@ -425,137 +425,137 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                             return true
                         }
                         R.id.debugButton -> {
+                            getCurrentVisibleContentRange()
 
-
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                                    // Display page number labels if the book contains a `page-list` navigation document.
-                                    (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-                                    navigator.applyDecorations(
-                                        listOfNotNull(null),
-                                        "tts"
-                                    )
-                                    val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
-                                    val content = publication.content(start)
-
-                                    val bookId = 1L
-
-                                    val book = checkNotNull(application.bookRepository.get(bookId))
-                                    val asset = readium.assetRetriever.retrieve(
-                                        book.url,
-                                        book.mediaType
-                                    ).getOrElse {
-                                        return@getOrElse Try.failure(
-                                            OpeningError.PublicationError(
-                                                PublicationError(it)
-                                            )
-                                        )
-                                    }
-
-                                    val audioPublication = readium.publicationOpener.open(
-                                        asset as Asset,
-                                        allowUserInteraction = true
-                                    ).getOrElse {
-                                        return@getOrElse Try.failure(
-                                            OpeningError.PublicationError(
-                                                PublicationError(it)
-                                            )
-                                        )
-                                    }
-
-                                    val initialLocator = book.progression
-                                        ?.let { Locator.fromJSON(JSONObject(it)) }
-
-//                                    val audioNavigator
-
-                                    val readerInitData = when {
-                                        (audioPublication as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
-                                            openAudio(bookId, audioPublication, initialLocator)
-                                        else ->
-                                            Try.failure(
-                                                OpeningError.CannotRender(
-                                                    DebugError("No navigator supports this publication.")
-                                                )
-                                            )
-                                    }
-
-                                    audioNavigator = readerInitData.getOrNull()!!
-
-//                                    Timber.d(readerInitData.toString())
-                                    audioNavigator.play()
-                                    audioNavigator.playback
-                                        .onEach { onPlaybackChanged(it) }
-                                        .launchIn(viewLifecycleOwner.lifecycleScope)
-
-                                    binding.loadAudioBook.visibility = View.GONE
-
-
-                                    val tokenizer = DefaultTextContentTokenizer(unit = TextUnit.Sentence, language = Language(Locale.ENGLISH))
-                                    val publicati = publication.content(start)
-//                                    val wholeText = content?.text()
-//                                    Timber.d(wholeText.toString())
-
-//                                    val tokenizedContent = tokenizer.tokenize(content?.text().toString())
-//                                    Timber.d(tokenizedContent.toString())
-
-                                    var i = 0;
-
-                                    val iterator = content?.iterator()
-                                    locators.clear()
-                                    while (iterator!!.hasNext() && i <= 10) {
-                                        val element = iterator.next()
-                                        val string = element.locator.text.highlight.toString()
-//                                        Timber.d(element.locator.text.highlight)
-                                        val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
-                                        for (range in tokenizedContent){
-//                                            Timber.d(range.toString())
-
-                                            val contextSnippetLength = 50
-
-                                            val after = string.substring(
-                                                range.last,
-                                                (range.last + contextSnippetLength).coerceAtMost(string.length)
-                                            )
-                                            val before = string.substring(
-                                                (range.first - contextSnippetLength).coerceAtLeast(0),
-                                                range.first
-                                            )
-                                            val subLocator = Locator.Text(
-                                                after = after.takeIf { it.isNotEmpty() },
-                                                before = before.takeIf { it.isNotEmpty() },
-                                                highlight = string.substring(range)
-                                            )
-
-//                                            Timber.d(subLocator.highlight)
-                                            locators.add(element.locator.copy(text = subLocator))
-                                        }
-
-//                                        locators.add(element.locator)
-                                        i=i+1
-                                    }
-
-                                    if (!locators.isEmpty()) {
-
-                                        val random = Random.Default
-                                        val decorations: List<Decoration> = locators.map { locator ->
-                                            Decoration(
-                                                id = "tts",
-                                                locator = locator,
-                                                style = Decoration.Style.Highlight(tint = Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256)))
-                                            )
-                                        }
-
-                                        navigator.applyDecorations(
-                                            decorations,
-                                            "tts"
-                                        )
-                                    }
-                                }
-                            }
-
-                            Timber.d(locators.toString())
-
-                            binding.audioOverlayText
+//                            viewLifecycleOwner.lifecycleScope.launch {
+//                                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+//                                    // Display page number labels if the book contains a `page-list` navigation document.
+//                                    (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+//                                    navigator.applyDecorations(
+//                                        listOfNotNull(null),
+//                                        "tts"
+//                                    )
+//                                    val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+//                                    val content = publication.content(start)
+//
+////                                    val bookId = 1L
+////
+////                                    val book = checkNotNull(application.bookRepository.get(bookId))
+////                                    val asset = readium.assetRetriever.retrieve(
+////                                        book.url,
+////                                        book.mediaType
+////                                    ).getOrElse {
+////                                        return@getOrElse Try.failure(
+////                                            OpeningError.PublicationError(
+////                                                PublicationError(it)
+////                                            )
+////                                        )
+////                                    }
+////
+////                                    val audioPublication = readium.publicationOpener.open(
+////                                        asset as Asset,
+////                                        allowUserInteraction = true
+////                                    ).getOrElse {
+////                                        return@getOrElse Try.failure(
+////                                            OpeningError.PublicationError(
+////                                                PublicationError(it)
+////                                            )
+////                                        )
+////                                    }
+////
+////                                    val initialLocator = book.progression
+////                                        ?.let { Locator.fromJSON(JSONObject(it)) }
+////
+//////                                    val audioNavigator
+////
+////                                    val readerInitData = when {
+////                                        (audioPublication as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
+////                                            openAudio(bookId, audioPublication, initialLocator)
+////                                        else ->
+////                                            Try.failure(
+////                                                OpeningError.CannotRender(
+////                                                    DebugError("No navigator supports this publication.")
+////                                                )
+////                                            )
+////                                    }
+////
+////                                    audioNavigator = readerInitData.getOrNull()!!
+////
+//////                                    Timber.d(readerInitData.toString())
+////                                    audioNavigator.play()
+////                                    audioNavigator.playback
+////                                        .onEach { onPlaybackChanged(it) }
+////                                        .launchIn(viewLifecycleOwner.lifecycleScope)
+////
+////                                    binding.loadAudioBook.visibility = View.GONE
+//
+//
+//                                    val tokenizer = DefaultTextContentTokenizer(unit = TextUnit.Sentence, language = Language(Locale.ENGLISH))
+//                                    val publicati = publication.content(start)
+////                                    val wholeText = content?.text()
+////                                    Timber.d(wholeText.toString())
+//
+////                                    val tokenizedContent = tokenizer.tokenize(content?.text().toString())
+////                                    Timber.d(tokenizedContent.toString())
+//
+//                                    var i = 0;
+//
+//                                    val iterator = content?.iterator()
+//                                    locators.clear()
+//                                    while (iterator!!.hasNext() && i <= 10) {
+//                                        val element = iterator.next()
+//                                        val string = element.locator.text.highlight.toString()
+////                                        Timber.d(element.locator.text.highlight)
+//                                        val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
+//                                        for (range in tokenizedContent){
+////                                            Timber.d(range.toString())
+//
+//                                            val contextSnippetLength = 50
+//
+//                                            val after = string.substring(
+//                                                range.last,
+//                                                (range.last + contextSnippetLength).coerceAtMost(string.length)
+//                                            )
+//                                            val before = string.substring(
+//                                                (range.first - contextSnippetLength).coerceAtLeast(0),
+//                                                range.first
+//                                            )
+//                                            val subLocator = Locator.Text(
+//                                                after = after.takeIf { it.isNotEmpty() },
+//                                                before = before.takeIf { it.isNotEmpty() },
+//                                                highlight = string.substring(range)
+//                                            )
+//
+////                                            Timber.d(subLocator.highlight)
+//                                            locators.add(element.locator.copy(text = subLocator))
+//                                        }
+//
+////                                        locators.add(element.locator)
+//                                        i=i+1
+//                                    }
+//
+//                                    if (!locators.isEmpty()) {
+//
+//                                        val random = Random.Default
+//                                        val decorations: List<Decoration> = locators.map { locator ->
+//                                            Decoration(
+//                                                id = "tts",
+//                                                locator = locator,
+//                                                style = Decoration.Style.Highlight(tint = Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256)))
+//                                            )
+//                                        }
+//
+//                                        navigator.applyDecorations(
+//                                            decorations,
+//                                            "tts"
+//                                        )
+//                                    }
+//                                }
+//                            }
+//
+//                            Timber.d(locators.toString())
+//
+//                            binding.audioOverlayText
 
 //                                    fun getCloseMatches(
 //                                        word: String,
@@ -1158,6 +1158,95 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         coroutineScope.launch {
             addBookFeedback(url)
         }
+    }
+
+    fun getCurrentVisibleContentRange(){
+        model.viewModelScope.launch {
+            // Display page number labels if the book contains a `page-list` navigation document.
+            (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+            navigator.applyDecorations(
+                listOfNotNull(null),
+                "tts"
+            )
+
+
+
+            val start = if (locators.isNotEmpty()) {
+                locators[0]
+            } else {
+                (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+            }
+
+            val content = publication.content(start)
+
+
+            val tokenizer = DefaultTextContentTokenizer(
+                unit = TextUnit.Sentence,
+                language = Language(Locale.ENGLISH)
+            )
+
+            var i = 0
+
+            val iterator = content?.iterator()
+            locators.clear()
+            while (iterator!!.hasNext() && i <= 10) {
+                val element = iterator.next()
+                val string = element.locator.text.highlight.toString()
+                val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
+                for (range in tokenizedContent) {
+
+                    val contextSnippetLength = 50
+
+                    val after = string.substring(
+                        range.last,
+                        (range.last + contextSnippetLength).coerceAtMost(string.length)
+                    )
+                    val before = string.substring(
+                        (range.first - contextSnippetLength).coerceAtLeast(0),
+                        range.first
+                    )
+                    val subLocator = Locator.Text(
+                        after = after.takeIf { it.isNotEmpty() },
+                        before = before.takeIf { it.isNotEmpty() },
+                        highlight = string.substring(range)
+                    )
+                    locators.add(element.locator.copy(text = subLocator))
+                }
+
+                i = i + 1
+            }
+
+            if (!locators.isEmpty()) {
+
+                val random = Random.Default
+                val decorations: List<Decoration> = locators.map { locator ->
+                    Decoration(
+                        id = "tts",
+                        locator = locator,
+                        style = Decoration.Style.Highlight(
+                            tint = Color.rgb(
+                                random.nextInt(256),
+                                random.nextInt(256),
+                                random.nextInt(256)
+                            )
+                        )
+                    )
+                }
+
+                navigator.applyDecorations(
+                    decorations,
+                    "tts"
+                )
+            }
+        }
+
+        Timber.d(locators.toString())
+
+        binding.audioOverlayText
+    }
+
+    fun onReanchorTranscriptionLocator(@Suppress("UNUSED_PARAMETER") view: View) {
+        locators.clear()
     }
 
 }
