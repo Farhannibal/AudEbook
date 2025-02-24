@@ -10,9 +10,11 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.res.AssetManager
+import android.database.Cursor
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.text.format.DateUtils
 import android.view.*
 import android.view.inputmethod.InputMethodManager
@@ -122,6 +124,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.count
 import kotlinx.coroutines.flow.sample
+import java.io.InputStream
 import kotlin.time.Duration.Companion.seconds
 
 
@@ -945,8 +948,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                     Timber.d(audioNavigator.readingOrder.items[0].toString())
 
+//                    val inputFilePath =
+//                        audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString()
                     val inputFilePath =
-                        audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString()
+                        getFilePathFromContentUri(requireContext(),Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())).toString()
                     val inputFileType = inputFilePath.substringAfterLast('.', "")
                     val outputFilePath =
                         sdcardDataFolder.absolutePath + "/extracted_segment.m4a"
@@ -1249,6 +1254,43 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     fun onReanchorTranscriptionLocator(@Suppress("UNUSED_PARAMETER") view: View) {
         locators.clear()
+    }
+
+    fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
+        var filePath: String? = null
+        val fileName = getFileName(context, contentUri)
+        if (fileName != null) {
+            val file = File(context.filesDir, fileName)
+            filePath = file.absolutePath
+            saveFileFromUri(context, contentUri, file)
+        }
+        return filePath
+    }
+
+    private fun getFileName(context: Context, uri: Uri): String? {
+        var fileName: String? = null
+        val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                fileName = it.getString(it.getColumnIndex(OpenableColumns.DISPLAY_NAME))
+            }
+        }
+        return fileName
+    }
+
+    private fun saveFileFromUri(context: Context, uri: Uri, file: File) {
+        val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+        val outputStream: FileOutputStream = FileOutputStream(file)
+        inputStream?.use { input ->
+            outputStream.use { output ->
+                val buffer = ByteArray(1024)
+                var length: Int
+                while (input.read(buffer).also { length = it } > 0) {
+                    output.write(buffer, 0, length)
+                }
+                output.flush()
+            }
+        }
     }
 
 }

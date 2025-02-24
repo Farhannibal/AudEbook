@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.res.AssetManager
 
 import android.annotation.SuppressLint
+import android.database.Cursor
 import android.media.AudioManager
 import android.media.MediaPlayer
 
@@ -66,6 +67,10 @@ import java.util.ArrayList;
 import android.util.Log;
 import org.readium.r2.shared.publication.epub.listOfAudioClips
 import org.readium.r2.shared.util.toUri
+
+import android.net.Uri
+import android.provider.MediaStore
+import android.provider.OpenableColumns
 
 @OptIn(ExperimentalReadiumApi::class)
 class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListener {
@@ -349,7 +354,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 
 //                    val inputFilePath = "data/user/0/com.example.audebook/files/b901dd88-80c9-44b6-94fc-46bd4d609a96.m4a"
                     val inputFilePath =
-                        publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()
+                        getFilePathFromContentUri(requireContext(),Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()))
                     val outputFilePath =
                         sdcardDataFolder.getAbsolutePath() + "/extracted_segment.m4a"
                     val timestamp = binding.timelinePosition.text.toString()
@@ -363,7 +368,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
                         startTimeInSeconds % 60
                     )
 //d
-                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
+                    extractAudioSegment(inputFilePath.toString(), outputFilePath, startTimeFormatted, duration)
 //d
 
 
@@ -505,9 +510,11 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 
                     Timber.d(navigator.readingOrder.items[0].toString())
 
+//                    val inputFilePath =
+//                        publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()
                     val inputFilePath =
-                        publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()
-                    val inputFileType = inputFilePath.substringAfterLast('.', "")
+                        getFilePathFromContentUri(requireContext(),Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()))
+//                    val inputFileType = inputFilePath.substringAfterLast('.', "")
                     val outputFilePath =
                         sdcardDataFolder.absolutePath + "/extracted_segment.m4a"
                     val timestamp = binding.timelinePosition.text.toString()
@@ -521,7 +528,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
                         startTimeInSeconds % 60
                     )
 
-                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
+                    extractAudioSegment(inputFilePath.toString(), outputFilePath, startTimeFormatted, duration)
 
                     mWhisper?.apply {
                         setFilePath(outputFilePath + ".wav")
@@ -532,6 +539,43 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
                 }
             } else {
                 Timber.d("Whisper is already in progress...!")
+            }
+        }
+    }
+
+    fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
+        var filePath: String? = null
+        val fileName = getFileName(context, contentUri)
+        if (fileName != null) {
+            val file = File(context.filesDir, fileName)
+            filePath = file.absolutePath
+            saveFileFromUri(context, contentUri, file)
+        }
+        return filePath
+    }
+
+    private fun getFileName(context: Context, uri: Uri): String? {
+        var fileName: String? = null
+        val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                fileName = it.getString(it.getColumnIndex(OpenableColumns.DISPLAY_NAME))
+            }
+        }
+        return fileName
+    }
+
+    private fun saveFileFromUri(context: Context, uri: Uri, file: File) {
+        val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+        val outputStream: FileOutputStream = FileOutputStream(file)
+        inputStream?.use { input ->
+            outputStream.use { output ->
+                val buffer = ByteArray(1024)
+                var length: Int
+                while (input.read(buffer).also { length = it } > 0) {
+                    output.write(buffer, 0, length)
+                }
+                output.flush()
             }
         }
     }
