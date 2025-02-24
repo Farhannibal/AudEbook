@@ -134,7 +134,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 //    lateinit var audioNavigator: TimeBasedMediaNavigator<*, *, *>
     lateinit var audioNavigator: AudioNavigator<*, *>
-//    lateinit var audioPublication: Publication
+    lateinit var audioPublication: Publication
 
     private lateinit var menuSearch: MenuItem
     lateinit var menuSearchView: SearchView
@@ -946,7 +946,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     Timber.d(audioNavigator.readingOrder.items[0].toString())
 
                     val inputFilePath =
-                        publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()
+                        audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString()
                     val inputFileType = inputFilePath.substringAfterLast('.', "")
                     val outputFilePath =
                         sdcardDataFolder.absolutePath + "/extracted_segment.m4a"
@@ -1031,7 +1031,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             )
         }
 
-        val audioPublication = readium.publicationOpener.open(
+        val audioPublicationLoader = readium.publicationOpener.open(
             asset as Asset,
             allowUserInteraction = true
         ).getOrElse {
@@ -1048,8 +1048,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                                    val audioNavigator
 
         val readerInitData = when {
-            (audioPublication as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
-                openAudio(bookId, audioPublication, initialLocator)
+            (audioPublicationLoader as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
+                openAudio(bookId, audioPublicationLoader, initialLocator)
             else ->
                 Try.failure(
                     OpeningError.CannotRender(
@@ -1059,6 +1059,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         audioNavigator = readerInitData.getOrNull()!!
+        audioPublication = audioPublicationLoader
+
 
 //                                    Timber.d(readerInitData.toString())
 //        audioNavigator.play()
