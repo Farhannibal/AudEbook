@@ -180,6 +180,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private var lastSaveTime: Long = 0
 
+    var totalTimeOfAudio: String = "00:00:00"
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -775,12 +777,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     audioNavigator.currentLocator.value,
                     epubBookId
                 )
-            }
 
-            if (playback.playWhenReady == true){
-
-//            Timber.d("onPlaybackChanged $playback")
-                transcribeAudio()
+                if (playback.playWhenReady == true)
+                    transcribeAudio()
             }
         }
     }
@@ -939,8 +938,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-    private fun transcribeAudio() {
-        model.viewModelScope.launch {
+    private suspend fun transcribeAudio() {
+//        model.viewModelScope.launch {
             if (mWhisper?.isInProgress() == false) {
                 val sdcardDataFolder = withContext(Dispatchers.IO) {
                     context?.getExternalFilesDir(null)
@@ -984,7 +983,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             } else {
                 Timber.d("Whisper is already in progress...!")
             }
-        }
+//        }
     }
 
     private suspend fun extractAudioSegment(
@@ -1067,6 +1066,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         audioNavigator = readerInitData.getOrNull()!!
         audioPublication = audioPublicationLoader
+
+        totalTimeOfAudio = audioNavigator.readingOrder.items[0].duration?.formatElapsedTime().toString()
 
 
 //                                    Timber.d(readerInitData.toString())
