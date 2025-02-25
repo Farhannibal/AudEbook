@@ -6,12 +6,14 @@
 
 package com.example.audebook.reader
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.res.AssetManager
 import android.database.Cursor
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -24,6 +26,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.ColorInt
 import androidx.appcompat.widget.SearchView
+import androidx.core.graphics.ColorUtils
 import androidx.core.os.BundleCompat
 import androidx.core.view.MenuHost
 import androidx.core.view.MenuProvider
@@ -385,6 +388,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         binding.transcribe.setOnClickListener(this::onReanchorTranscriptionLocator)
 //        binding.transcribe.setOnClickListener(this::onExtractAndTranscribe)
         binding.loadAudioBook.setOnClickListener(this::onLoadAudioBook )
+        updateControlsLayoutBackground(false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -762,6 +766,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         )
 
+//        if (playback.playWhenReady) {
+//            updateControlsLayoutBackground(true)
+//        } else {
+//            updateControlsLayoutBackground(false)
+//        }
         if (seekingItem == null) {
             updateTimeline(playback)
         }
@@ -818,8 +827,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 model.viewModelScope.launch {
                     if (audioNavigator.playback.value.playWhenReady) {
                         audioNavigator.pause()
+                        updateControlsLayoutBackground(false)
                     } else {
                         audioNavigator.play()
+                        updateControlsLayoutBackground(true)
                     }
                 }
                 Unit
@@ -1294,6 +1305,27 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 output.flush()
             }
         }
+    }
+
+    private fun updateControlsLayoutBackground(playWhenReady: Boolean) {
+        val currentColor = (binding.controlsLayout.background as? ColorDrawable)?.color ?: Color.WHITE
+        val startAlpha = Color.alpha(currentColor)
+        val endAlpha = if (playWhenReady) 0 else 210
+
+        val animator = ValueAnimator.ofInt(startAlpha, endAlpha)
+        animator.addUpdateListener { animation ->
+            val animatedValue = animation.animatedValue as Int
+            val color = ColorUtils.setAlphaComponent(Color.WHITE, animatedValue)
+            binding.controlsLayout.setBackgroundColor(color)
+        }
+        animator.duration = 300 // Duration in milliseconds
+        animator.repeatCount = 0 // Ensure the animation does not repeat
+
+        if (playWhenReady) {
+            animator.startDelay = 3500 // Delay in milliseconds before starting the animation
+        }
+
+        animator.start()
     }
 
 }

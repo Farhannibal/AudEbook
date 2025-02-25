@@ -36,10 +36,11 @@
             android:visibility="visible" />
 
         <LinearLayout
+            android:id="@+id/controlsLayout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:alpha="1"
-            android:background="#A2FFFFFF"
+            android:background="#D1FFFFFF"
             android:orientation="vertical">
 
             <androidx.constraintlayout.widget.ConstraintLayout
