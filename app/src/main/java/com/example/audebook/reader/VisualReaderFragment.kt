@@ -6,6 +6,7 @@
 
 package com.example.audebook.reader
 
+import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
@@ -644,17 +645,24 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
     private fun toggleControlsPadding() {
         val controls = binding.controls
         val currentPaddingBottom = controls.paddingBottom
-        val newPaddingBottom = if (currentPaddingBottom == 0) {
+        val targetPaddingBottom = if (currentPaddingBottom == 0) {
             resources.getDimensionPixelSize(R.dimen.padding_40dp)
         } else {
             0
         }
-        controls.setPadding(
-            controls.paddingLeft,
-            controls.paddingTop,
-            controls.paddingRight,
-            newPaddingBottom
-        )
+
+        val animator = ValueAnimator.ofInt(currentPaddingBottom, targetPaddingBottom)
+        animator.addUpdateListener { animation ->
+            val animatedValue = animation.animatedValue as Int
+            controls.setPadding(
+                controls.paddingLeft,
+                controls.paddingTop,
+                controls.paddingRight,
+                animatedValue
+            )
+        }
+        animator.duration = 300 // Duration in milliseconds
+        animator.start()
     }
 }
 
