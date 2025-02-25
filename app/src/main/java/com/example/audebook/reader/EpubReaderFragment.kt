@@ -764,11 +764,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             updateTimeline(playback)
         }
 
-        if (playback.playWhenReady == true){
 
-//            Timber.d("onPlaybackChanged $playback")
-            transcribeAudio()
-        }
 
 
         val currentTime = System.currentTimeMillis()
@@ -779,6 +775,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     audioNavigator.currentLocator.value,
                     epubBookId
                 )
+            }
+
+            if (playback.playWhenReady == true){
+
+//            Timber.d("onPlaybackChanged $playback")
+                transcribeAudio()
             }
         }
     }
@@ -992,7 +994,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         duration: Int
     ) {
         withContext(Dispatchers.IO) {
-            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i $inputFilePath  -t $duration -c copy $outputFilePath"
+            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -c copy $outputFilePath"
             Timber.d(command)
             FFmpegKit.execute(command)
 
