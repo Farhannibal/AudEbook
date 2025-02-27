@@ -185,6 +185,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     var totalTimeOfAudio: String = "00:00:00"
 
+    var currentTranscribeSegment: String = "00:00:00"
+
+    private val transcriptionMap: MutableMap<String, String> = mutableMapOf()
+
+    private lateinit var transcriptionRange: List<String>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -249,7 +254,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                     val timeTaken = System.currentTimeMillis() - startTime
 //                            handler.post { binding.tvStatus.text = "Processing done in ${timeTaken}ms" }
 
-                                    binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
+                                    lifecycleScope.launch(Dispatchers.Main) {
+                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
+                                        transcriptionMap[currentTranscribeSegment] = result
+                                    }
 
                                     Timber.d("Result: $result")
                                     Timber.d("timeTaken: $timeTaken ms")
@@ -787,8 +795,44 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     epubBookId
                 )
 
-                if (playback.playWhenReady == true)
-                    transcribeAudio()
+
+//                val i = 0
+//                val playbackTranscribeSegment = roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
+//                if (transcriptionMap.containsKey(playbackTranscribeSegment)) {
+//                    // The map contains the key
+//                    val transcription = transcriptionMap[playbackTranscribeSegment]
+//                    Timber.d("Transcription for $playbackTranscribeSegment: $transcription")
+//                    val nextSegment = getNext15SecondInterval(playbackTranscribeSegment,1)
+//                } else {
+//                    // The map does not contain the key
+//                    Timber.d("No transcription found for $playbackTranscribeSegment")
+//                    if (playback.playWhenReady == true)
+//                        transcribeAudio()
+//                }
+
+                val playbackTranscribeSegment = roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
+                var currentSegment = playbackTranscribeSegment
+                var iterations = 1
+
+                while (iterations <= 12) {
+                    if (transcriptionMap.containsKey(currentSegment)) {
+                        // The map contains the key
+                        val transcription = transcriptionMap[currentSegment]
+                        Timber.d("Transcription for $currentSegment: $transcription")
+
+                    } else {
+                        // The map does not contain the key
+                        Timber.d("No transcription found for $currentSegment")
+                        if (playback.playWhenReady == true) {
+                            transcribeAudio(currentSegment)
+                        }
+                        break
+                    }
+                    currentSegment = getNext15SecondInterval(playbackTranscribeSegment, iterations)
+                    iterations++
+                }
+
+
             }
         }
     }
@@ -949,7 +993,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-    private suspend fun transcribeAudio() {
+    private suspend fun transcribeAudio(transcriptionTimestamp: String) {
 //        model.viewModelScope.launch {
             if (mWhisper?.isInProgress() == false) {
                 val sdcardDataFolder = withContext(Dispatchers.IO) {
@@ -972,7 +1016,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     }
                     val duration = 15
 
-                    val startTimeInSeconds = convertTimestampToSeconds(timestamp)
+                    currentTranscribeSegment = transcriptionTimestamp
+                    transcriptionRange = generateTranscriptionRanges(currentTranscribeSegment)
+
+                    val startTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
                     val startTimeFormatted = String.format(
                         "%02d:%02d:%02d",
                         startTimeInSeconds / 3600,
@@ -1020,6 +1067,49 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         if (parts.size != 3)
             parts = "00:00:00".split(":").map { it.toInt() }
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    }
+
+    private fun roundTimestampToNearest15Seconds(timestamp: String): String {
+        var parts = timestamp.split(":").map { it.toInt() }
+        if (parts.size != 3)
+            parts = "00:00:00".split(":").map { it.toInt() }
+        val totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+        val roundedSeconds = (totalSeconds / 15) * 15
+
+        val hours = roundedSeconds / 3600
+        val minutes = (roundedSeconds % 3600) / 60
+        val seconds = roundedSeconds % 60
+
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    private fun generateTranscriptionRanges(currentTranscribeSegment: String): List<String> {
+        val baseTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
+        val ranges = mutableListOf<String>()
+
+        for (i in -15..45 step 15) {
+            val newTimeInSeconds = baseTimeInSeconds + i
+            val hours = newTimeInSeconds / 3600
+            val minutes = (newTimeInSeconds % 3600) / 60
+            val seconds = newTimeInSeconds % 60
+            ranges.add(String.format("%02d:%02d:%02d", hours, minutes, seconds))
+        }
+
+        Timber.d("Transcription Range: " + ranges.toString())
+
+        return ranges
+    }
+
+    private fun getNext15SecondInterval(currentTranscribeSegment: String, intervals: Int): String {
+        val baseTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
+        val newTimeInSeconds = baseTimeInSeconds + (intervals *15)
+        val hours = newTimeInSeconds / 3600
+        val minutes = (newTimeInSeconds % 3600) / 60
+        val seconds = newTimeInSeconds % 60
+
+//        Timber.d("Transcription for: "+ String.format("%02d:%02d:%02d", hours, minutes, seconds))
+
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
     }
 
     private suspend fun loadAudiobookNavigator(bookId: Long){
@@ -1281,12 +1371,14 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return filePath
     }
 
+    @SuppressLint("Range")
     private fun getFileName(context: Context, uri: Uri): String? {
         var fileName: String? = null
         val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
         cursor?.use {
             if (it.moveToFirst()) {
                 fileName = it.getString(it.getColumnIndex(OpenableColumns.DISPLAY_NAME))
+
             }
         }
         return fileName
@@ -1321,9 +1413,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         animator.duration = 300 // Duration in milliseconds
         animator.repeatCount = 0 // Ensure the animation does not repeat
 
-        if (playWhenReady) {
-            animator.startDelay = 3500 // Delay in milliseconds before starting the animation
-        }
+//        if (playWhenReady) {
+//            animator.startDelay = 3500 // Delay in milliseconds before starting the animation
+//        }
 
         animator.start()
     }
