@@ -150,7 +150,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private var isSearchViewIconified = true
 
     private lateinit var locators: MutableList<Locator>
-    private lateinit var locatorMap: MutableMap<Locator, Boolean>
+
 
     private lateinit var application: Application
 
@@ -190,6 +190,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private val transcriptionMap: MutableMap<String, String> = mutableMapOf()
 
     private lateinit var transcriptionRange: List<String>
+
+    private val locatorMap: MutableMap<String, List<Locator>> = mutableMapOf()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -257,6 +259,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                     lifecycleScope.launch(Dispatchers.Main) {
                                         binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
                                         transcriptionMap[currentTranscribeSegment] = result
+                                        locatorMap[currentTranscribeSegment] = syncTranscriptionWithLocator(result)
                                     }
 
                                     Timber.d("Result: $result")
@@ -277,7 +280,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
         locators = mutableListOf()
-        locatorMap = mutableMapOf()
+//        locatorMap = mutableMapOf()
 
         val readerData = model.readerInitData as? EpubReaderInitData ?: run {
             // We provide a dummy fragment factory  if the ReaderActivity is restored after the
@@ -1418,6 +1421,15 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        }
 
         animator.start()
+    }
+
+    fun syncTranscriptionWithLocator(transcription: String): List<Locator>{
+
+        for (locator in locators){
+            val text = locator.text.highlight.toString()
+        }
+
+        return mutableListOf()
     }
 
 }
