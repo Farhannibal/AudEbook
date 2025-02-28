@@ -257,7 +257,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                            handler.post { binding.tvStatus.text = "Processing done in ${timeTaken}ms" }
 
                                     lifecycleScope.launch(Dispatchers.Main) {
-                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
+//                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
                                         transcriptionMap[currentTranscribeSegment] = result
                                         locatorMap[currentTranscribeSegment] = syncTranscriptionWithLocator(result)
                                     }
@@ -787,8 +787,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
 
-
-
+        val playbackTranscribeSegment = roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
+        binding.transcriptionResult.text = if (transcriptionMap.containsKey(playbackTranscribeSegment)) {
+            transcriptionMap[playbackTranscribeSegment]
+        } else {
+            binding.transcriptionResult.text
+        }
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastSaveTime >= 5000) { // 5 seconds
             lastSaveTime = currentTime
@@ -813,7 +817,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                        transcribeAudio()
 //                }
 
-                val playbackTranscribeSegment = roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
+
                 var currentSegment = playbackTranscribeSegment
                 var iterations = 1
 
@@ -1303,7 +1307,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
             val iterator = content?.iterator()
             locators.clear()
-            while (iterator!!.hasNext() && i <= 10) {
+            while (iterator!!.hasNext() && i <= 100) {
                 val element = iterator.next()
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
@@ -1354,7 +1358,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
-        Timber.d(locators.toString())
+        Timber.d("Transcription for: "+locators.toString())
 
 //        binding.audioOverlayText
     }
@@ -1423,13 +1427,51 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         animator.start()
     }
 
-    fun syncTranscriptionWithLocator(transcription: String): List<Locator>{
+    suspend fun syncTranscriptionWithLocator(transcription: String): List<Locator>{
 
-        for (locator in locators){
+        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+            navigator.applyDecorations(
+                listOfNotNull(null),
+                "tts"
+            )
+
+        getCurrentVisibleContentRange()
+        val jaroWinkler = JaroWinkler()
+        val matchedLocators = mutableListOf<Locator>()
+
+        for (locator in locators) {
             val text = locator.text.highlight.toString()
+            val similarity = jaroWinkler.similarity(transcription, text)
+            if (similarity > 0.5) { // Adjust the threshold as needed
+                matchedLocators.add(locator)
+            }
         }
 
-        return mutableListOf()
+
+        if (!matchedLocators.isEmpty()) {
+
+                val random = Random.Default
+                val decorations: List<Decoration> = matchedLocators.map { locator ->
+                    Decoration(
+                        id = "tts",
+                        locator = locator,
+                        style = Decoration.Style.Highlight(
+                            tint = Color.rgb(
+                                random.nextInt(256),
+                                random.nextInt(256),
+                                random.nextInt(256)
+                            )
+                        )
+                    )
+                }
+
+                navigator.applyDecorations(
+                    decorations,
+                    "tts"
+                )
+            }
+
+        return matchedLocators
     }
 
 }
