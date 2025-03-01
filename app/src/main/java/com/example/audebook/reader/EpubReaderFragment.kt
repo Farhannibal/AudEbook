@@ -1468,35 +1468,43 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            }
 //        }
 
-        val transcriptionSegments = transcription.split(" ") // Split transcription into words
-        val sentences = locators.map { it.text.highlight.toString() }
+//        val transcriptionSegments = transcription.split(" ") // Split transcription into words
+//        val sentences = locators.map { it.text.highlight.toString() }
+//
+//        for (each in transcriptionSegments) {
+//            val closestMatches = sentences.map { it to jaroWinkler.similarity(each, it) }
+//                .filter { it.second >= 0.8 }
+//                .sortedByDescending { it.second }
+//                .take(1)
+//                .map { it.first }
+//
+//            val closestMatchIndex = closestMatches.firstOrNull()?.let { sentences.indexOf(it) }
+//
+////            voiceMap.add(
+////                mapOf(
+////                    "text" to each,
+////                    "closest_match" to closestMatches.firstOrNull(),
+////                    "closest_match_index" to closestMatchIndex,
+////                    "first_section" to 0,
+////                    "last_section" to 0
+////                )
+////            )
+//
+//            if (closestMatchIndex != null) {
+//                matchedLocators.add(locators[closestMatchIndex])
+//                matchedDebugTest.add(locators[closestMatchIndex].text.highlight.toString())
+//                Timber.d("Transcription for: " + locators[closestMatchIndex].text.highlight.toString())
+//            }
+//        }
 
-        for (each in transcriptionSegments) {
-            val closestMatches = sentences.map { it to jaroWinkler.similarity(each, it) }
-                .filter { it.second >= 0.8 }
-                .sortedByDescending { it.second }
-                .take(1)
-                .map { it.first }
-
-            val closestMatchIndex = closestMatches.firstOrNull()?.let { sentences.indexOf(it) }
-
-//            voiceMap.add(
-//                mapOf(
-//                    "text" to each,
-//                    "closest_match" to closestMatches.firstOrNull(),
-//                    "closest_match_index" to closestMatchIndex,
-//                    "first_section" to 0,
-//                    "last_section" to 0
-//                )
-//            )
-
-            if (closestMatchIndex != null) {
-                matchedLocators.add(locators[closestMatchIndex])
-                matchedDebugTest.add(locators[closestMatchIndex].text.highlight.toString())
-                Timber.d("Transcription for: " + locators[closestMatchIndex].text.highlight.toString())
+        for (locator in locators) {
+            val text = locator.text.highlight.toString()
+            if (isSentenceInParagraph(text, transcription)) {
+                matchedLocators.add(locator)
+                matchedDebugTest.add(locator.text.highlight.toString())
+                Timber.d("Transcription for: " + locator.text.highlight.toString())
             }
         }
-
 
         if (!matchedLocators.isEmpty()) {
 
@@ -1527,6 +1535,21 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         Timber.d("")
 
         return matchedLocators
+    }
+
+    private fun isSentenceInParagraph(sentence: String, paragraph: String, threshold: Double = 0.8): Boolean {
+        val jaroWinkler = JaroWinkler()
+        val words = paragraph.split(" ")
+        val sentenceWords = sentence.split(" ")
+
+        for (i in 0..(words.size - sentenceWords.size)) {
+            val subParagraph = words.subList(i, i + sentenceWords.size).joinToString(" ")
+            val similarity = jaroWinkler.similarity(sentence, subParagraph)
+            if (similarity >= threshold) {
+                return true
+            }
+        }
+        return false
     }
 
 }
