@@ -445,7 +445,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                             return true
                         }
                         R.id.debugButton -> {
-                            getCurrentVisibleContentRange()
+//                            getCurrentVisibleContentRange()
+                            Timber.d("")
 
 //                            viewLifecycleOwner.lifecycleScope.launch {
 //                                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -1278,14 +1279,15 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-    fun getCurrentVisibleContentRange(){
-        model.viewModelScope.launch {
+    suspend fun getCurrentVisibleContentRange(){
+//        model.viewModelScope.launch {
             // Display page number labels if the book contains a `page-list` navigation document.
-            (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-            navigator.applyDecorations(
-                listOfNotNull(null),
-                "tts"
-            )
+//            (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+//            navigator.applyDecorations(
+//                listOfNotNull(null),
+//                "tts"
+//            )
+
 
 
 
@@ -1307,7 +1309,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
             val iterator = content?.iterator()
             locators.clear()
-            while (iterator!!.hasNext() && i <= 100) {
+            while (iterator!!.hasNext() && i <= 15) {
                 val element = iterator.next()
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
@@ -1334,31 +1336,33 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 i = i + 1
             }
 
-            if (!locators.isEmpty()) {
+//            if (!locators.isEmpty()) {
+//
+//                val random = Random.Default
+//                val decorations: List<Decoration> = locators.map { locator ->
+//                    Decoration(
+//                        id = "tts",
+//                        locator = locator,
+//                        style = Decoration.Style.Highlight(
+//                            tint = Color.rgb(
+//                                random.nextInt(256),
+//                                random.nextInt(256),
+//                                random.nextInt(256)
+//                            )
+//                        )
+//                    )
+//                }
+//
+//                navigator.applyDecorations(
+//                    decorations,
+//                    "tts"
+//                )
+//            }
+            Timber.d("Transcription for: "+locators.toString())
 
-                val random = Random.Default
-                val decorations: List<Decoration> = locators.map { locator ->
-                    Decoration(
-                        id = "tts",
-                        locator = locator,
-                        style = Decoration.Style.Highlight(
-                            tint = Color.rgb(
-                                random.nextInt(256),
-                                random.nextInt(256),
-                                random.nextInt(256)
-                            )
-                        )
-                    )
-                }
+//        }
 
-                navigator.applyDecorations(
-                    decorations,
-                    "tts"
-                )
-            }
-        }
 
-        Timber.d("Transcription for: "+locators.toString())
 
 //        binding.audioOverlayText
     }
@@ -1428,7 +1432,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     suspend fun syncTranscriptionWithLocator(transcription: String): List<Locator>{
-
+        val startTimeGetContent = System.currentTimeMillis()
         (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
             navigator.applyDecorations(
                 listOfNotNull(null),
@@ -1438,12 +1442,58 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         getCurrentVisibleContentRange()
         val jaroWinkler = JaroWinkler()
         val matchedLocators = mutableListOf<Locator>()
+        val matchedDebugTest = mutableListOf<String>()
 
-        for (locator in locators) {
-            val text = locator.text.highlight.toString()
-            val similarity = jaroWinkler.similarity(transcription, text)
-            if (similarity > 0.5) { // Adjust the threshold as needed
-                matchedLocators.add(locator)
+//        for (locator in locators) {
+//            val text = locator.text.highlight.toString()
+//            val similarity = jaroWinkler.similarity(transcription, text)
+//            if (similarity > 0.5) { // Adjust the threshold as needed
+//                matchedLocators.add(locator)
+//                matchedDebugTest.add(locator.text.highlight.toString())
+//            }
+//        }
+
+//        val transcriptionSegments = transcription.split(" ") // Split transcription into words
+//
+//        for (locator in locators) {
+//            val text = locator.text.highlight.toString()
+//            for (segment in transcriptionSegments) {
+//                val similarity = jaroWinkler.similarity(segment, text)
+//                if (similarity > 0.5) { // Adjust the threshold as needed
+//                    matchedLocators.add(locator)
+//                    matchedDebugTest.add(locator.text.highlight.toString())
+//                    Timber.d("Transcription for: " + locator.text.highlight.toString()+ "|" + similarity + "|" + segment)
+//                    break // Stop comparing once a match is found
+//                }
+//            }
+//        }
+
+        val transcriptionSegments = transcription.split(" ") // Split transcription into words
+        val sentences = locators.map { it.text.highlight.toString() }
+
+        for (each in transcriptionSegments) {
+            val closestMatches = sentences.map { it to jaroWinkler.similarity(each, it) }
+                .filter { it.second >= 0.8 }
+                .sortedByDescending { it.second }
+                .take(1)
+                .map { it.first }
+
+            val closestMatchIndex = closestMatches.firstOrNull()?.let { sentences.indexOf(it) }
+
+//            voiceMap.add(
+//                mapOf(
+//                    "text" to each,
+//                    "closest_match" to closestMatches.firstOrNull(),
+//                    "closest_match_index" to closestMatchIndex,
+//                    "first_section" to 0,
+//                    "last_section" to 0
+//                )
+//            )
+
+            if (closestMatchIndex != null) {
+                matchedLocators.add(locators[closestMatchIndex])
+                matchedDebugTest.add(locators[closestMatchIndex].text.highlight.toString())
+                Timber.d("Transcription for: " + locators[closestMatchIndex].text.highlight.toString())
             }
         }
 
@@ -1470,6 +1520,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     "tts"
                 )
             }
+
+        Timber.d("Transcription for: "+transcription)
+        Timber.d("Transcription for: "+matchedDebugTest.toString())
+        Timber.d("Transcription for time taken to transcribe: "+ (System.currentTimeMillis() - startTimeGetContent))
+        Timber.d("")
 
         return matchedLocators
     }
