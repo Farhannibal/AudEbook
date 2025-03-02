@@ -1279,9 +1279,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-    suspend fun getCurrentVisibleContentRange(){
+    suspend fun getCurrentVisibleContentRange() {
 //        model.viewModelScope.launch {
-            // Display page number labels if the book contains a `page-list` navigation document.
+        // Display page number labels if the book contains a `page-list` navigation document.
 //            (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
 //            navigator.applyDecorations(
 //                listOfNotNull(null),
@@ -1289,52 +1289,81 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            )
 
 
+        val start = if (locators.isNotEmpty()) {
+            locators[0]
+        } else {
+            (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+        }
+
+        val content = publication.content(start)
 
 
-            val start = if (locators.isNotEmpty()) {
-                locators[0]
-            } else {
-                (navigator as? VisualNavigator)?.firstVisibleElementLocator()
-            }
+        val tokenizer = DefaultTextContentTokenizer(
+            unit = TextUnit.Sentence,
+            language = Language(Locale.ENGLISH)
+        )
 
-            val content = publication.content(start)
+        var i = 0
 
+        val iterator = content?.iterator()
+        locators.clear()
+        var combinedRange: IntRange? = null
+        while (iterator!!.hasNext() && i <= 15) {
+            val element = iterator.next()
+            val string = element.locator.text.highlight.toString()
+            val tokenizedContent = tokenizer.tokenize(string)
 
-            val tokenizer = DefaultTextContentTokenizer(
-                unit = TextUnit.Sentence,
-                language = Language(Locale.ENGLISH)
-            )
-
-            var i = 0
-
-            val iterator = content?.iterator()
-            locators.clear()
-            while (iterator!!.hasNext() && i <= 15) {
-                val element = iterator.next()
-                val string = element.locator.text.highlight.toString()
-                val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
-                for (range in tokenizedContent) {
-
-                    val contextSnippetLength = 50
-
-                    val after = string.substring(
-                        range.last,
-                        (range.last + contextSnippetLength).coerceAtMost(string.length)
-                    )
-                    val before = string.substring(
-                        (range.first - contextSnippetLength).coerceAtLeast(0),
-                        range.first
-                    )
-                    val subLocator = Locator.Text(
-                        after = after.takeIf { it.isNotEmpty() },
-                        before = before.takeIf { it.isNotEmpty() },
-                        highlight = string.substring(range)
-                    )
-                    locators.add(element.locator.copy(text = subLocator))
+            for (range in tokenizedContent) {
+                if (range.last - range.first < 50) {
+                    if (combinedRange == null) {
+                        combinedRange = range
+                    } else {
+                        combinedRange = combinedRange.first..range.last
+                    }
+                } else {
+                    if (combinedRange != null) {
+                        addLocator(element.locator, string, combinedRange)
+                        combinedRange = null
+                    }
+                    addLocator(element.locator, string, range)
                 }
-
-                i = i + 1
             }
+
+            if (combinedRange != null) {
+                addLocator(element.locator, string, combinedRange)
+                combinedRange = null
+            }
+
+            i++
+        }
+
+//            while (iterator!!.hasNext() && i <= 15) {
+//                val element = iterator.next()
+//                val string = element.locator.text.highlight.toString()
+////                val wordCount = string.split(" ").count()
+//                val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
+//                for (range in tokenizedContent) {
+//
+//                    val contextSnippetLength = 50
+//
+//                    val after = string.substring(
+//                        range.last,
+//                        (range.last + contextSnippetLength).coerceAtMost(string.length)
+//                    )
+//                    val before = string.substring(
+//                        (range.first - contextSnippetLength).coerceAtLeast(0),
+//                        range.first
+//                    )
+//                    val subLocator = Locator.Text(
+//                        after = after.takeIf { it.isNotEmpty() },
+//                        before = before.takeIf { it.isNotEmpty() },
+//                        highlight = string.substring(range)
+//                    )
+//                    locators.add(element.locator.copy(text = subLocator))
+//                }
+//
+//                i = i + 1
+//            }
 
 //            if (!locators.isEmpty()) {
 //
@@ -1358,13 +1387,31 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    "tts"
 //                )
 //            }
-            Timber.d("Transcription for: "+locators.toString())
+        Timber.d("Transcription for: " + locators.toString())
 
 //        }
 
 
-
 //        binding.audioOverlayText
+    }
+
+    private fun addLocator(element: Locator, string: String, range: IntRange) {
+        val contextSnippetLength = 50
+
+        val after = string.substring(
+            range.last,
+            (range.last + contextSnippetLength).coerceAtMost(string.length)
+        )
+        val before = string.substring(
+            (range.first - contextSnippetLength).coerceAtLeast(0),
+            range.first
+        )
+        val subLocator = Locator.Text(
+            after = after.takeIf { it.isNotEmpty() },
+            before = before.takeIf { it.isNotEmpty() },
+            highlight = string.substring(range)
+        )
+        locators.add(element.copy(text = subLocator))
     }
 
     fun onReanchorTranscriptionLocator(@Suppress("UNUSED_PARAMETER") view: View) {
@@ -1504,7 +1551,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 matchedLocators.add(locator)
                 matchedDebugTest.add(locator.text.highlight.toString())
                 matchedIndexs.add(locators.indexOf(locator))
-                Timber.d("Transcription for: " + locator.text.highlight.toString())
+//                Timber.d("Transcription for: " + locator.text.highlight.toString())
             }
         }
 
@@ -1533,7 +1580,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         Timber.d("Transcription for: "+transcription)
         Timber.d("Transcription for: "+matchedDebugTest.toString())
-        Timber.d("Transcription for: "+removeOutliers(matchedIndexs).toString())
+        Timber.d("Transcription for: "+matchedIndexs.toString())
+        Timber.d("Transcription for: "+findLongestRun(matchedIndexs).toString(),5)
         Timber.d("Transcription for time taken to transcribe: "+ (System.currentTimeMillis() - startTimeGetContent))
         Timber.d("")
 
@@ -1542,33 +1590,65 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private fun isSentenceInParagraph(sentence: String, paragraph: String, threshold: Double = 0.75): Boolean {
         val jaroWinkler = JaroWinkler()
-        val words = paragraph.split(" ")
-        val sentenceWords = sentence.split(" ")
+        val cleanedParagraph = removePunctuation(paragraph).lowercase()
+        val cleanedSentence = removePunctuation(sentence).lowercase()
+        val words = cleanedParagraph.split(" ")
+        val sentenceWords = cleanedSentence.split(" ")
 
         for (i in 0..(words.size - sentenceWords.size)) {
             val subParagraph = words.subList(i, i + sentenceWords.size).joinToString(" ")
-            val similarity = jaroWinkler.similarity(sentence, subParagraph)
+            val similarity = jaroWinkler.similarity(cleanedSentence, subParagraph)
             if (similarity >= threshold) {
-                Timber.d(sentence + "|" + similarity)
+                Timber.d("$cleanedSentence | $similarity")
                 return true
             }
         }
         return false
     }
 
-    fun calculateMean(values: List<Int>): Double {
-        return values.average()
+    private fun removePunctuation(text: String): String {
+        return text.replace(Regex("[^\\w\\s]"), "")
     }
 
-    fun calculateStandardDeviation(values: List<Int>, mean: Double): Double {
-        val variance = values.map { (it - mean) * (it - mean) }.average()
-        return kotlin.math.sqrt(variance)
-    }
+    fun findLongestRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
+        if (indices.isEmpty()) return emptyList()
 
-    fun removeOutliers(values: List<Int>, threshold: Double = 1.0): List<Int> {
-        val mean = calculateMean(values)
-        val standardDeviation = calculateStandardDeviation(values, mean)
-        return values.filter { kotlin.math.abs(it - mean) <= threshold * standardDeviation }
+        val sortedIndices = indices.sorted()
+        val filledIndices = mutableListOf<Int>()
+
+        // Fill in the gaps within the margin of error
+        for (i in sortedIndices.indices) {
+            filledIndices.add(sortedIndices[i])
+            if (i < sortedIndices.size - 1) {
+                val gap = sortedIndices[i + 1] - sortedIndices[i]
+                if (gap > 1 && gap <= marginOfError + 1) {
+                    for (j in 1 until gap) {
+                        filledIndices.add(sortedIndices[i] + j)
+                    }
+                }
+            }
+        }
+
+        // Find the longest run of consecutive indices
+        var longestRun = mutableListOf<Int>()
+        var currentRun = mutableListOf<Int>()
+
+        for (i in filledIndices.indices) {
+            if (currentRun.isEmpty() || filledIndices[i] - currentRun.last() == 1) {
+                currentRun.add(filledIndices[i])
+            } else {
+                if (currentRun.size > longestRun.size) {
+                    longestRun = currentRun
+                }
+                currentRun = mutableListOf(filledIndices[i])
+            }
+        }
+
+        if (currentRun.size > longestRun.size) {
+            longestRun = currentRun
+        }
+
+        return longestRun
     }
 
 }
