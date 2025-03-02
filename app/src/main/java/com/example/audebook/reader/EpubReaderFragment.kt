@@ -1443,6 +1443,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val jaroWinkler = JaroWinkler()
         val matchedLocators = mutableListOf<Locator>()
         val matchedDebugTest = mutableListOf<String>()
+        val matchedIndexs = mutableListOf<Int>()
 
 //        for (locator in locators) {
 //            val text = locator.text.highlight.toString()
@@ -1502,6 +1503,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             if (isSentenceInParagraph(text, transcription)) {
                 matchedLocators.add(locator)
                 matchedDebugTest.add(locator.text.highlight.toString())
+                matchedIndexs.add(locators.indexOf(locator))
                 Timber.d("Transcription for: " + locator.text.highlight.toString())
             }
         }
@@ -1531,13 +1533,14 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         Timber.d("Transcription for: "+transcription)
         Timber.d("Transcription for: "+matchedDebugTest.toString())
+        Timber.d("Transcription for: "+removeOutliers(matchedIndexs).toString())
         Timber.d("Transcription for time taken to transcribe: "+ (System.currentTimeMillis() - startTimeGetContent))
         Timber.d("")
 
         return matchedLocators
     }
 
-    private fun isSentenceInParagraph(sentence: String, paragraph: String, threshold: Double = 0.8): Boolean {
+    private fun isSentenceInParagraph(sentence: String, paragraph: String, threshold: Double = 0.75): Boolean {
         val jaroWinkler = JaroWinkler()
         val words = paragraph.split(" ")
         val sentenceWords = sentence.split(" ")
@@ -1546,10 +1549,26 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             val subParagraph = words.subList(i, i + sentenceWords.size).joinToString(" ")
             val similarity = jaroWinkler.similarity(sentence, subParagraph)
             if (similarity >= threshold) {
+                Timber.d(sentence + "|" + similarity)
                 return true
             }
         }
         return false
+    }
+
+    fun calculateMean(values: List<Int>): Double {
+        return values.average()
+    }
+
+    fun calculateStandardDeviation(values: List<Int>, mean: Double): Double {
+        val variance = values.map { (it - mean) * (it - mean) }.average()
+        return kotlin.math.sqrt(variance)
+    }
+
+    fun removeOutliers(values: List<Int>, threshold: Double = 1.0): List<Int> {
+        val mean = calculateMean(values)
+        val standardDeviation = calculateStandardDeviation(values, mean)
+        return values.filter { kotlin.math.abs(it - mean) <= threshold * standardDeviation }
     }
 
 }
