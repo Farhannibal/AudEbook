@@ -831,9 +831,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     } else {
                         // The map does not contain the key
                         Timber.d("No transcription found for $currentSegment")
-                        if (playback.playWhenReady == true) {
+//                        if (playback.playWhenReady == true) {
                             transcribeAudio(currentSegment)
-                        }
+//                        }
                         break
                     }
                     currentSegment = getNext15SecondInterval(playbackTranscribeSegment, iterations)
@@ -1299,7 +1299,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
         val tokenizer = DefaultTextContentTokenizer(
-            unit = TextUnit.Sentence,
+            unit = TextUnit.Word,
             language = Language(Locale.ENGLISH)
         )
 
@@ -1311,31 +1311,68 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         while (iterator!!.hasNext() && i <= 15) {
             val element = iterator.next()
             val string = element.locator.text.highlight.toString()
-            val tokenizedContent = tokenizer.tokenize(string)
+            val tokenizedContent = mergeRanges(tokenizer.tokenize(string),25)
+//            Timber.d("Transcription for unmerged: " + tokenizedContent.toString())
+//            Timber.d("Transcription for merged: " + mergeRanges(tokenizedContent).toString())
 
             for (range in tokenizedContent) {
-                if (range.last - range.first < 50) {
-                    if (combinedRange == null) {
-                        combinedRange = range
-                    } else {
-                        combinedRange = combinedRange.first..range.last
-                    }
-                } else {
-                    if (combinedRange != null) {
-                        addLocator(element.locator, string, combinedRange)
-                        combinedRange = null
-                    }
-                    addLocator(element.locator, string, range)
-                }
+//                if (range.last - range.first < 50) {
+//                    if (combinedRange == null) {
+//                        combinedRange = range
+//                    } else {
+//                        combinedRange = combinedRange.first..range.last
+//                    }
+//                } else {
+//                    if (combinedRange != null) {
+//                        if (combinedRange.last - combinedRange.first >= 50) {
+//                            addLocator(element.locator, string, combinedRange)
+//                            combinedRange = null
+//                        } else {
+//                            combinedRange = combinedRange.first..range.last
+//                        }
+//                    }
+//                    addLocator(element.locator, string, range)
+//                }
+                addLocator(element.locator, string, range)
             }
 
-            if (combinedRange != null) {
-                addLocator(element.locator, string, combinedRange)
-                combinedRange = null
-            }
+//            if (combinedRange != null && combinedRange.last - combinedRange.first >= 50) {
+//                addLocator(element.locator, string, combinedRange)
+//                combinedRange = null
+//            }
 
             i++
         }
+//        var combinedRange: IntRange? = null
+//        while (iterator!!.hasNext() && i <= 15) {
+//            val element = iterator.next()
+//            val string = element.locator.text.highlight.toString()
+//            val tokenizedContent = tokenizer.tokenize(string)
+//
+//            for (range in tokenizedContent) {
+//
+//                if (range.last - range.first < 50) {
+//                    if (combinedRange == null) {
+//                        combinedRange = range
+//                    } else {
+//                        combinedRange = combinedRange.first..range.last
+//                    }
+//                } else {
+//                    if (combinedRange != null) {
+//                        addLocator(element.locator, string, combinedRange)
+//                        combinedRange = null
+//                    }
+//                    addLocator(element.locator, string, range)
+//                }
+//            }
+//
+//            if (combinedRange != null) {
+//                addLocator(element.locator, string, combinedRange)
+//                combinedRange = null
+//            }
+//
+//            i++
+//        }
 
 //            while (iterator!!.hasNext() && i <= 15) {
 //                val element = iterator.next()
@@ -1414,8 +1451,64 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         locators.add(element.copy(text = subLocator))
     }
 
+    fun mergeRanges(ranges: List<IntRange>, minSize: Int = 50): List<IntRange> {
+        if (ranges.isEmpty()) return emptyList()
+
+        val sortedRanges = ranges.sortedBy { it.first }
+        val mergedRanges = mutableListOf<IntRange>()
+        var currentRange = sortedRanges.first()
+
+        for (range in sortedRanges.drop(1)) {
+            if (range.first <= currentRange.last + 1) {
+                currentRange = currentRange.first..maxOf(currentRange.last, range.last)
+            } else {
+                mergedRanges.add(currentRange)
+                currentRange = range
+            }
+        }
+        mergedRanges.add(currentRange)
+
+        // Ensure each resulting range has a minimum size of 50
+        val finalRanges = mutableListOf<IntRange>()
+        var combinedRange: IntRange? = null
+
+        for (range in mergedRanges) {
+            if (range.last - range.first + 1 >= minSize) {
+                if (combinedRange != null) {
+                    finalRanges.add(combinedRange.first..range.last)
+                    combinedRange = null
+                } else {
+                    finalRanges.add(range)
+                }
+            } else {
+                if (combinedRange == null) {
+                    combinedRange = range
+                } else {
+                    combinedRange = combinedRange.first..range.last
+                    if (combinedRange.last - combinedRange.first + 1 >= minSize) {
+                        finalRanges.add(combinedRange)
+                        combinedRange = null
+                    }
+                }
+            }
+        }
+
+        if (combinedRange != null) {
+            if (finalRanges.isNotEmpty() && combinedRange.last - combinedRange.first + 1 < minSize) {
+                val lastRange = finalRanges.removeAt(finalRanges.size - 1)
+                finalRanges.add(lastRange.first..combinedRange.last)
+            } else {
+                finalRanges.add(combinedRange)
+            }
+        }
+
+        return finalRanges
+    }
+
     fun onReanchorTranscriptionLocator(@Suppress("UNUSED_PARAMETER") view: View) {
-        locators.clear()
+//        locators.clear()
+        audioNavigator.play()
+        audioNavigator.pause()
     }
 
     fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
@@ -1488,7 +1581,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         getCurrentVisibleContentRange()
         val jaroWinkler = JaroWinkler()
-        val matchedLocators = mutableListOf<Locator>()
+        var matchedLocators = mutableListOf<Locator>()
         val matchedDebugTest = mutableListOf<String>()
         val matchedIndexs = mutableListOf<Int>()
 
@@ -1554,6 +1647,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                Timber.d("Transcription for: " + locator.text.highlight.toString())
             }
         }
+
+        val indexRange = findLongestRun(matchedIndexs,5)
+        matchedLocators = locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
 
         if (!matchedLocators.isEmpty()) {
 
