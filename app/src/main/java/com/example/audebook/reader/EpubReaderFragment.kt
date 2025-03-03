@@ -1291,6 +1291,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         val start = if (locators.isNotEmpty()) {
             locators[0]
+
         } else {
             (navigator as? VisualNavigator)?.firstVisibleElementLocator()
         }
@@ -1308,10 +1309,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val iterator = content?.iterator()
         locators.clear()
         var combinedRange: IntRange? = null
-        while (iterator!!.hasNext() && i <= 15) {
+//        while (iterator!!.hasNext() && i <= 15) {
+        while (iterator!!.hasNext()) {
             val element = iterator.next()
             val string = element.locator.text.highlight.toString()
-            val tokenizedContent = mergeRanges(tokenizer.tokenize(string),25)
+            val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 //            Timber.d("Transcription for unmerged: " + tokenizedContent.toString())
 //            Timber.d("Transcription for merged: " + mergeRanges(tokenizedContent).toString())
 
@@ -1579,8 +1581,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 "tts"
             )
 
-        getCurrentVisibleContentRange()
-        val jaroWinkler = JaroWinkler()
+        if (locators.isEmpty())
+            getCurrentVisibleContentRange()
         var matchedLocators = mutableListOf<Locator>()
         val matchedDebugTest = mutableListOf<String>()
         val matchedIndexs = mutableListOf<Int>()
@@ -1638,7 +1640,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            }
 //        }
 
-        for (locator in locators) {
+        for (locator in locators.slice(0..100)) {
             val text = locator.text.highlight.toString()
             if (isSentenceInParagraph(text, transcription)) {
                 matchedLocators.add(locator)
@@ -1650,6 +1652,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         val indexRange = findLongestRun(matchedIndexs,5)
         matchedLocators = locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
+
 
         if (!matchedLocators.isEmpty()) {
 
@@ -1674,10 +1677,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 )
             }
 
+        locators.subList(0, indexRange.first()).clear()
         Timber.d("Transcription for: "+transcription)
         Timber.d("Transcription for: "+matchedDebugTest.toString())
         Timber.d("Transcription for: "+matchedIndexs.toString())
-        Timber.d("Transcription for: "+findLongestRun(matchedIndexs).toString(),5)
+        Timber.d("Transcription for: "+matchedLocators.map { it.text.highlight.toString() }.toString())
+        Timber.d("Transcription for: "+indexRange.toString())
         Timber.d("Transcription for time taken to transcribe: "+ (System.currentTimeMillis() - startTimeGetContent))
         Timber.d("")
 
@@ -1706,37 +1711,62 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return text.replace(Regex("[^\\w\\s]"), "")
     }
 
+//    fun findLongestRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
+//        if (indices.isEmpty()) return emptyList()
+//
+//        val sortedIndices = indices.sorted()
+//        val filledIndices = mutableListOf<Int>()
+//
+//        // Fill in the gaps within the margin of error
+//        for (i in sortedIndices.indices) {
+//            filledIndices.add(sortedIndices[i])
+//            if (i < sortedIndices.size - 1) {
+//                val gap = sortedIndices[i + 1] - sortedIndices[i]
+//                if (gap > 1 && gap <= marginOfError + 1) {
+//                    for (j in 1 until gap) {
+//                        filledIndices.add(sortedIndices[i] + j)
+//                    }
+//                }
+//            }
+//        }
+//
+//        // Find the longest run of consecutive indices
+//        var longestRun = mutableListOf<Int>()
+//        var currentRun = mutableListOf<Int>()
+//
+//        for (i in filledIndices.indices) {
+//            if (currentRun.isEmpty() || filledIndices[i] - currentRun.last() == 1) {
+//                currentRun.add(filledIndices[i])
+//            } else {
+//                if (currentRun.size > longestRun.size) {
+//                    longestRun = currentRun
+//                }
+//                currentRun = mutableListOf(filledIndices[i])
+//            }
+//        }
+//
+//        if (currentRun.size > longestRun.size) {
+//            longestRun = currentRun
+//        }
+//
+//        return longestRun
+//    }
+
     fun findLongestRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
         if (indices.isEmpty()) return emptyList()
 
         val sortedIndices = indices.sorted()
-        val filledIndices = mutableListOf<Int>()
-
-        // Fill in the gaps within the margin of error
-        for (i in sortedIndices.indices) {
-            filledIndices.add(sortedIndices[i])
-            if (i < sortedIndices.size - 1) {
-                val gap = sortedIndices[i + 1] - sortedIndices[i]
-                if (gap > 1 && gap <= marginOfError + 1) {
-                    for (j in 1 until gap) {
-                        filledIndices.add(sortedIndices[i] + j)
-                    }
-                }
-            }
-        }
-
-        // Find the longest run of consecutive indices
         var longestRun = mutableListOf<Int>()
         var currentRun = mutableListOf<Int>()
 
-        for (i in filledIndices.indices) {
-            if (currentRun.isEmpty() || filledIndices[i] - currentRun.last() == 1) {
-                currentRun.add(filledIndices[i])
+        for (i in sortedIndices.indices) {
+            if (currentRun.isEmpty() || sortedIndices[i] - currentRun.last() <= marginOfError) {
+                currentRun.add(sortedIndices[i])
             } else {
                 if (currentRun.size > longestRun.size) {
                     longestRun = currentRun
                 }
-                currentRun = mutableListOf(filledIndices[i])
+                currentRun = mutableListOf(sortedIndices[i])
             }
         }
 
@@ -1744,7 +1774,22 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             longestRun = currentRun
         }
 
-        return longestRun
+        // Fill in any gaps within the margin of error
+        val filledRun = mutableListOf<Int>()
+        for (i in longestRun.indices) {
+            filledRun.add(longestRun[i])
+            if (i < longestRun.size - 1) {
+                val gap = longestRun[i + 1] - longestRun[i]
+                if (gap > 1 && gap <= marginOfError + 1) {
+                    for (j in 1 until gap) {
+                        filledRun.add(longestRun[i] + j)
+                    }
+                }
+            }
+        }
+
+        // Ensure the filled run is sorted and contains no duplicates
+        return filledRun.distinct().sorted()
     }
 
 }
