@@ -19,6 +19,7 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.text.format.DateUtils
 import android.view.*
+import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.SeekBar
@@ -30,9 +31,6 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.os.BundleCompat
 import androidx.core.view.MenuHost
 import androidx.core.view.MenuProvider
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.preferencesDataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.fragment.app.FragmentResultListener
 import androidx.fragment.app.commit
 import androidx.fragment.app.commitNow
@@ -63,26 +61,19 @@ import timber.log.Timber
 import info.debatty.java.stringsimilarity.JaroWinkler
 import org.readium.navigator.media.common.TimeBasedMediaNavigator
 import org.readium.r2.shared.publication.Publication
-import org.readium.r2.shared.publication.services.content.ContentTokenizer
 
 import kotlin.random.Random
 
 import org.readium.r2.shared.util.tokenizer.DefaultTextContentTokenizer
-import org.readium.r2.shared.util.tokenizer.TextTokenizer
 import org.readium.r2.shared.util.tokenizer.TextUnit
-import org.readium.r2.shared.util.tokenizer.Tokenizer
 import org.readium.r2.shared.util.Language
 import java.util.Locale
 
 import com.example.audebook.Readium
 import com.example.audebook.Application
 import com.example.audebook.asr.Whisper
-import com.example.audebook.bookshelf.BookshelfViewModel.Event
 import com.example.audebook.domain.PublicationError
-import com.example.audebook.domain.PublicationError.Companion.invoke
 import com.example.audebook.domain.toUserError
-import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
-import com.example.audebook.utils.EventChannel
 import com.example.audebook.utils.UserError
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.launchIn
@@ -90,14 +81,11 @@ import kotlinx.coroutines.flow.onEach
 import org.json.JSONObject
 import org.readium.adapter.exoplayer.audio.ExoPlayerEngine
 import org.readium.adapter.exoplayer.audio.ExoPlayerEngineProvider
-import org.readium.adapter.exoplayer.audio.ExoPlayerNavigator
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
 import org.readium.adapter.exoplayer.audio.ExoPlayerSettings
 import org.readium.navigator.media.audio.AudioNavigator
 import org.readium.navigator.media.audio.AudioNavigatorFactory
-import org.readium.navigator.media.audio.AudioNavigatorFactory.Companion.invoke
 import org.readium.navigator.media.common.MediaNavigator
-import org.readium.r2.shared.publication.allAreHtml
 import org.readium.r2.shared.util.DebugError
 import org.readium.r2.shared.util.Try
 import org.readium.r2.shared.util.asset.Asset
@@ -109,12 +97,10 @@ import kotlin.time.DurationUnit
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.example.audebook.domain.Bookshelf
 //import com.example.audebook.domain.PublicationError
-import com.example.audebook.domain.PublicationError.Companion.invoke
 import com.example.audebook.domain.PublicationRetriever
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.util.AbsoluteUrl
-import org.readium.r2.shared.util.file.FileSystemError
 import org.readium.r2.shared.util.format.Format
 import org.readium.r2.shared.util.toUrl
 
@@ -122,11 +108,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 
-import com.example.audebook.domain.CoverStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.flow.count
-import kotlinx.coroutines.flow.sample
 import java.io.InputStream
 import kotlin.time.Duration.Companion.seconds
 
@@ -192,6 +175,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private lateinit var transcriptionRange: List<String>
 
     private val locatorMap: MutableMap<String, List<Locator>> = mutableMapOf()
+
+    private var isLoadingInitTranscription: Boolean = false
+
+    private lateinit var latestPlaybackStatus: TimeBasedMediaNavigator.Playback
+
+    private var isFollowingAudio: Boolean = true
+    private var lastHighlightUpdate: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -260,7 +250,15 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
                                         transcriptionMap[currentTranscribeSegment] = result
                                         locatorMap[currentTranscribeSegment] = syncTranscriptionWithLocator(result)
+
+//                                        if (isLoadingInitTranscription && (transcriptionMap.count() <=2)){
+//                                            transcribeAudio(getNext15SecondInterval(currentTranscribeSegment, 1))
+//                                        }else{
+//                                            loadThenPlayEnd()
+//                                        }
                                     }
+
+
 
                                     Timber.d("Result: $result")
                                     Timber.d("timeTaken: $timeTaken ms")
@@ -448,160 +446,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                            getCurrentVisibleContentRange()
                             Timber.d("")
 
-//                            viewLifecycleOwner.lifecycleScope.launch {
-//                                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-//                                    // Display page number labels if the book contains a `page-list` navigation document.
-//                                    (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-//                                    navigator.applyDecorations(
-//                                        listOfNotNull(null),
-//                                        "tts"
-//                                    )
-//                                    val start = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
-//                                    val content = publication.content(start)
-//
-////                                    val bookId = 1L
-////
-////                                    val book = checkNotNull(application.bookRepository.get(bookId))
-////                                    val asset = readium.assetRetriever.retrieve(
-////                                        book.url,
-////                                        book.mediaType
-////                                    ).getOrElse {
-////                                        return@getOrElse Try.failure(
-////                                            OpeningError.PublicationError(
-////                                                PublicationError(it)
-////                                            )
-////                                        )
-////                                    }
-////
-////                                    val audioPublication = readium.publicationOpener.open(
-////                                        asset as Asset,
-////                                        allowUserInteraction = true
-////                                    ).getOrElse {
-////                                        return@getOrElse Try.failure(
-////                                            OpeningError.PublicationError(
-////                                                PublicationError(it)
-////                                            )
-////                                        )
-////                                    }
-////
-////                                    val initialLocator = book.progression
-////                                        ?.let { Locator.fromJSON(JSONObject(it)) }
-////
-//////                                    val audioNavigator
-////
-////                                    val readerInitData = when {
-////                                        (audioPublication as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
-////                                            openAudio(bookId, audioPublication, initialLocator)
-////                                        else ->
-////                                            Try.failure(
-////                                                OpeningError.CannotRender(
-////                                                    DebugError("No navigator supports this publication.")
-////                                                )
-////                                            )
-////                                    }
-////
-////                                    audioNavigator = readerInitData.getOrNull()!!
-////
-//////                                    Timber.d(readerInitData.toString())
-////                                    audioNavigator.play()
-////                                    audioNavigator.playback
-////                                        .onEach { onPlaybackChanged(it) }
-////                                        .launchIn(viewLifecycleOwner.lifecycleScope)
-////
-////                                    binding.loadAudioBook.visibility = View.GONE
-//
-//
-//                                    val tokenizer = DefaultTextContentTokenizer(unit = TextUnit.Sentence, language = Language(Locale.ENGLISH))
-//                                    val publicati = publication.content(start)
-////                                    val wholeText = content?.text()
-////                                    Timber.d(wholeText.toString())
-//
-////                                    val tokenizedContent = tokenizer.tokenize(content?.text().toString())
-////                                    Timber.d(tokenizedContent.toString())
-//
-//                                    var i = 0;
-//
-//                                    val iterator = content?.iterator()
-//                                    locators.clear()
-//                                    while (iterator!!.hasNext() && i <= 10) {
-//                                        val element = iterator.next()
-//                                        val string = element.locator.text.highlight.toString()
-////                                        Timber.d(element.locator.text.highlight)
-//                                        val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
-//                                        for (range in tokenizedContent){
-////                                            Timber.d(range.toString())
-//
-//                                            val contextSnippetLength = 50
-//
-//                                            val after = string.substring(
-//                                                range.last,
-//                                                (range.last + contextSnippetLength).coerceAtMost(string.length)
-//                                            )
-//                                            val before = string.substring(
-//                                                (range.first - contextSnippetLength).coerceAtLeast(0),
-//                                                range.first
-//                                            )
-//                                            val subLocator = Locator.Text(
-//                                                after = after.takeIf { it.isNotEmpty() },
-//                                                before = before.takeIf { it.isNotEmpty() },
-//                                                highlight = string.substring(range)
-//                                            )
-//
-////                                            Timber.d(subLocator.highlight)
-//                                            locators.add(element.locator.copy(text = subLocator))
-//                                        }
-//
-////                                        locators.add(element.locator)
-//                                        i=i+1
-//                                    }
-//
-//                                    if (!locators.isEmpty()) {
-//
-//                                        val random = Random.Default
-//                                        val decorations: List<Decoration> = locators.map { locator ->
-//                                            Decoration(
-//                                                id = "tts",
-//                                                locator = locator,
-//                                                style = Decoration.Style.Highlight(tint = Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256)))
-//                                            )
-//                                        }
-//
-//                                        navigator.applyDecorations(
-//                                            decorations,
-//                                            "tts"
-//                                        )
-//                                    }
-//                                }
-//                            }
-//
-//                            Timber.d(locators.toString())
-//
-//                            binding.audioOverlayText
-
-//                                    fun getCloseMatches(
-//                                        word: String,
-//                                        possibilities: List<String>,
-//                                        n: Int = 1,
-//                                        cutoff: Double = 0.5
-//                                    ): List<String> {
-//                                        val jaroWinkler = JaroWinkler()
-//                                        return possibilities
-//                                            .map { it to jaroWinkler.similarity(word, it) }
-//                                            .filter { it.second >= cutoff }
-//                                            .sortedByDescending { it.second }
-//                                            .take(n)
-//                                            .map { it.first }
-//                                    }
-//
-//                                    fun main() {
-//                                        val eachText = "example"
-//                                        val sentences = listOf("sample", "example", "exemplar", "test", "simple")
-//                                        val resultSegments = listOf("segment1", "segment2") // Example segments
-//
-//                                        val closeMatches = getCloseMatches(eachText, sentences.take(resultSegments.size * 2))
-//                                        println(closeMatches)
-//                                    }
-
                             return true
                         }
                     }
@@ -759,6 +603,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         playback: TimeBasedMediaNavigator.Playback
     ) {
         Timber.v("onPlaybackChanged $playback")
+        latestPlaybackStatus = playback
         val failureState = playback.state as? AudioNavigator.State.Failure<*>
         if (failureState != null) {
             val error = failureState.error as ExoPlayerEngine.Error
@@ -788,13 +633,27 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
 
+
+
         val playbackTranscribeSegment = roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
-        binding.transcriptionResult.text = if (transcriptionMap.containsKey(playbackTranscribeSegment)) {
-            transcriptionMap[playbackTranscribeSegment]
-        } else {
-            binding.transcriptionResult.text
-        }
+//        binding.transcriptionResult.text = if (transcriptionMap.containsKey(playbackTranscribeSegment)) {
+//            transcriptionMap[playbackTranscribeSegment]
+//        } else {
+//            binding.transcriptionResult.text
+//        }
         val currentTime = System.currentTimeMillis()
+
+        if(currentTime - lastHighlightUpdate >= 500) {
+            lastHighlightUpdate = currentTime
+            if (locatorMap.containsKey(playbackTranscribeSegment)) {
+                model.viewModelScope.launch {
+                    highlightText(locatorMap[playbackTranscribeSegment])
+                }
+            }
+        }
+
+
+
         if (currentTime - lastSaveTime >= 5000) { // 5 seconds
             lastSaveTime = currentTime
             model.viewModelScope.launch {
@@ -803,46 +662,60 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     epubBookId
                 )
 
-
-//                val i = 0
-//                val playbackTranscribeSegment = roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
-//                if (transcriptionMap.containsKey(playbackTranscribeSegment)) {
-//                    // The map contains the key
-//                    val transcription = transcriptionMap[playbackTranscribeSegment]
-//                    Timber.d("Transcription for $playbackTranscribeSegment: $transcription")
-//                    val nextSegment = getNext15SecondInterval(playbackTranscribeSegment,1)
-//                } else {
-//                    // The map does not contain the key
-//                    Timber.d("No transcription found for $playbackTranscribeSegment")
-//                    if (playback.playWhenReady == true)
-//                        transcribeAudio()
-//                }
+                getNextTranscriptionSegment()
 
 
-                var currentSegment = playbackTranscribeSegment
-                var iterations = 1
-
-                while (iterations <= 12) {
-                    if (transcriptionMap.containsKey(currentSegment)) {
-                        // The map contains the key
-                        val transcription = transcriptionMap[currentSegment]
-                        Timber.d("Transcription for $currentSegment: $transcription")
-
-                    } else {
-                        // The map does not contain the key
-                        Timber.d("No transcription found for $currentSegment")
+//                var currentSegment = getPlaybackTranscribeSegment()
+//                var iterations = 1
+//
+//                while (iterations <= 12) {
+//                    if (transcriptionMap.containsKey(currentSegment)) {
+//                        // The map contains the key
+//                        val transcription = transcriptionMap[currentSegment]
+//                        Timber.d("Transcription for $currentSegment: $transcription")
+//
+//                    } else {
+//                        // The map does not contain the key
+//                        Timber.d("No transcription found for $currentSegment")
 //                        if (playback.playWhenReady == true) {
-                            transcribeAudio(currentSegment)
+//                            transcribeAudio(currentSegment)
 //                        }
-                        break
-                    }
-                    currentSegment = getNext15SecondInterval(playbackTranscribeSegment, iterations)
-                    iterations++
-                }
+//                        break
+//                    }
+//                    currentSegment = getNext15SecondInterval(playbackTranscribeSegment, iterations)
+//                    iterations++
+//                }
 
 
             }
         }
+    }
+
+    private suspend fun getNextTranscriptionSegment() {
+        var currentSegment = getPlaybackTranscribeSegment()
+        var iterations = 1
+
+        while (iterations <= 12) {
+            if (transcriptionMap.containsKey(currentSegment)) {
+                // The map contains the key
+                val transcription = transcriptionMap[currentSegment]
+                Timber.d("Transcription for $currentSegment: $transcription")
+
+            } else {
+                // The map does not contain the key
+                Timber.d("No transcription found for $currentSegment")
+                if (latestPlaybackStatus.playWhenReady == true) {
+                    transcribeAudio(currentSegment)
+                }
+                break
+            }
+            currentSegment = getNext15SecondInterval(getPlaybackTranscribeSegment(), iterations)
+            iterations++
+        }
+    }
+
+    private fun getPlaybackTranscribeSegment(): String {
+        return roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
     }
 
     private fun updateTimeline(
@@ -881,6 +754,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         audioNavigator.pause()
                         updateControlsLayoutBackground(false)
                     } else {
+                        if (transcriptionMap.count() <= 2){
+                            loadThenPlayStart(roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString()))
+                        }
                         audioNavigator.play()
                         updateControlsLayoutBackground(true)
                     }
@@ -1575,11 +1451,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     suspend fun syncTranscriptionWithLocator(transcription: String): List<Locator>{
         val startTimeGetContent = System.currentTimeMillis()
-        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-            navigator.applyDecorations(
-                listOfNotNull(null),
-                "tts"
-            )
+//        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+//            navigator.applyDecorations(
+//                listOfNotNull(null),
+//                "tts"
+//            )
 
         if (locators.isEmpty())
             getCurrentVisibleContentRange()
@@ -1654,33 +1530,33 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         matchedLocators = locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
 
 
-        if (!matchedLocators.isEmpty()) {
-
-                val random = Random.Default
-                val decorations: List<Decoration> = matchedLocators.map { locator ->
-                    Decoration(
-                        id = "tts",
-                        locator = locator,
-                        style = Decoration.Style.Highlight(
-                            tint = Color.rgb(
-                                random.nextInt(256),
-                                random.nextInt(256),
-                                random.nextInt(256)
-                            )
-                        )
-                    )
-                }
-
-                navigator.applyDecorations(
-                    decorations,
-                    "tts"
-                )
-            }
+//        if (!matchedLocators.isEmpty()) {
+//
+//                val random = Random.Default
+//                val decorations: List<Decoration> = matchedLocators.map { locator ->
+//                    Decoration(
+//                        id = "tts",
+//                        locator = locator,
+//                        style = Decoration.Style.Highlight(
+//                            tint = Color.rgb(
+//                                random.nextInt(256),
+//                                random.nextInt(256),
+//                                random.nextInt(256)
+//                            )
+//                        )
+//                    )
+//                }
+//
+//                navigator.applyDecorations(
+//                    decorations,
+//                    "tts"
+//                )
+//            }
 
         locators.subList(0, indexRange.first()).clear()
         Timber.d("Transcription for: "+transcription)
-        Timber.d("Transcription for: "+matchedDebugTest.toString())
-        Timber.d("Transcription for: "+matchedIndexs.toString())
+//        Timber.d("Transcription for: "+matchedDebugTest.toString())
+//        Timber.d("Transcription for: "+matchedIndexs.toString())
         Timber.d("Transcription for: "+matchedLocators.map { it.text.highlight.toString() }.toString())
         Timber.d("Transcription for: "+indexRange.toString())
         Timber.d("Transcription for time taken to transcribe: "+ (System.currentTimeMillis() - startTimeGetContent))
@@ -1710,6 +1586,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private fun removePunctuation(text: String): String {
         return text.replace(Regex("[^\\w\\s]"), "")
     }
+
+
 
 //    fun findLongestRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
 //        if (indices.isEmpty()) return emptyList()
@@ -1790,6 +1668,56 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         // Ensure the filled run is sorted and contains no duplicates
         return filledRun.distinct().sorted()
+    }
+
+    suspend fun loadThenPlayStart(timestamp: String) {
+//        isLoadingInitTranscription = true
+//        binding.loadingOverlay.visibility = View.VISIBLE
+//        transcribeAudio(timestamp)
+        Timber.d("Transcription for loadThenPlayStart")
+//        audioNavigator.play()
+//        binding.loadingOverlay.visibility = View.GONE
+    }
+
+    suspend fun loadThenPlayEnd() {
+        isLoadingInitTranscription = false
+        binding.loadingOverlay.visibility = View.GONE
+        audioNavigator.play()
+    }
+
+    suspend fun highlightText(matchedLocators: List<Locator>?) {
+        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+        navigator.applyDecorations(
+            listOfNotNull(null),
+            "tts"
+        )
+
+        matchedLocators?.isEmpty()?.let {
+            if (!it) {
+
+                navigator.go(matchedLocators[0], true)
+
+                val random = Random.Default
+                val decorations: List<Decoration> = matchedLocators.map { locator ->
+                    Decoration(
+                        id = "tts",
+                        locator = locator,
+                        style = Decoration.Style.Highlight(
+                            tint = Color.rgb(
+                                random.nextInt(256),
+                                random.nextInt(256),
+                                random.nextInt(256)
+                            )
+                        )
+                    )
+                }
+
+                navigator.applyDecorations(
+                    decorations,
+                    "tts"
+                )
+            }
+        }
     }
 
 }
