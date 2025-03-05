@@ -203,7 +203,7 @@
                 android:layout_gravity="center"
                 android:scaleX="1"
                 android:scaleY="1"
-                app:srcCompat="@drawable/media3_icon_check_circle_unfilled" />
+                app:srcCompat="@drawable/spinning_loading_icon" />
 
             <TextView
                 android:id="@+id/textView"

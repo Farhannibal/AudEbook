@@ -1719,7 +1719,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         Timber.d("Transcription for loadThenPlayStart")
         for (timestamp in timestamps) {
             while (!locatorMap.containsKey(timestamp)) {
-                if (System.currentTimeMillis() - currentTime >= 50) {
+                if (System.currentTimeMillis() - currentTime >= 100) {
                     currentTime = System.currentTimeMillis()
                     transcribeAudio(timestamp)
                 }
