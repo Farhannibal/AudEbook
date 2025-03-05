@@ -1,8 +1,6 @@
-<rotate xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_loading"
-    android:fromDegrees="0"
-    android:toDegrees="360"
-    android:pivotX="50%"
-    android:pivotY="50%"
-    android:duration="1000"
-    android:repeatCount="infinite" />
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_loading">
+    <target
+        android:animation="@animator/rotate"
+        android:name="group"/>
+</animated-vector>

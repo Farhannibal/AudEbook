@@ -13,6 +13,8 @@ import android.content.Intent
 import android.content.res.AssetManager
 import android.database.Cursor
 import android.graphics.Color
+import android.graphics.drawable.AnimatedVectorDrawable
+import android.graphics.drawable.AnimationDrawable
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -416,6 +418,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 // Display page number labels if the book contains a `page-list` navigation document.
                 (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
             }
+        }
+
+        val loadingIcon = view.findViewById<ImageView>(R.id.imageView3)
+        val drawable = loadingIcon.drawable
+        if (drawable is AnimatedVectorDrawable) {
+            drawable.start()
         }
 
         val menuHost: MenuHost = requireActivity()
@@ -995,7 +1003,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val baseTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
         val ranges = mutableListOf<String>()
 
-        for (i in -15..45 step 15) {
+//        for (i in -15..45 step 15) {
+        for (i in 0..30 step 15) {
             val newTimeInSeconds = baseTimeInSeconds + i
             val hours = newTimeInSeconds / 3600
             val minutes = (newTimeInSeconds % 3600) / 60

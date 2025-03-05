@@ -186,9 +186,11 @@
         android:layout_height="match_parent"
         android:alpha="100"
         android:background="#1A040000"
-        android:visibility="gone"
         android:clickable="true"
-        android:focusable="true">
+        android:focusable="true"
+        android:textAlignment="center"
+        android:visibility="gone"
+        tools:layout_editor_absoluteX="10dp">
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -210,7 +212,12 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:text="Transcribing Audiobook and Syncing to Text..." />
+                android:layout_marginHorizontal="60dp"
+                android:background="#3F0D0D0D"
+                android:text="Transcribing Audiobook and Syncing to Text..."
+                android:textAlignment="center"
+                android:textColor="#FFFFFF"
+                android:textSize="24sp" />
         </LinearLayout>
 
     </FrameLayout>
