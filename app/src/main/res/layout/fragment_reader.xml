@@ -165,12 +165,13 @@
                     android:src="@drawable/outline_forward_30_24" />
 
                 <ImageButton
-                    android:id="@+id/transcribe2"
+                    android:id="@+id/setSpeed"
                     android:layout_width="30dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
                     android:background="@android:color/transparent"
                     android:contentDescription="Transcribe"
+                    android:src="@drawable/media3_icon_playback_speed_1_0"
                     app:tint="#000000" />
 
             </LinearLayout>
@@ -185,7 +186,9 @@
         android:layout_height="match_parent"
         android:alpha="100"
         android:background="#1A040000"
-        android:visibility="gone">
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
 
         <LinearLayout
             android:layout_width="wrap_content"
