@@ -766,7 +766,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         audioNavigator.pause()
                         updateControlsLayoutBackground(false)
                     } else {
-                        if (transcriptionMap.count() <= 2){
+                        if (transcriptionMap.isEmpty()){
                             loadThenPlayStart(generateTranscriptionRanges(roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())))
                         }
                         audioNavigator.play()
@@ -960,13 +960,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        }
     }
 
-    private suspend fun extractAudioSegment(
+    private fun extractAudioSegment(
         inputFilePath: String,
         outputFilePath: String,
         startTime: String,
         duration: Int
     ) {
-        withContext(Dispatchers.IO) {
+//        withContext(Dispatchers.IO) {
             val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -c copy $outputFilePath"
             Timber.d(command)
             FFmpegKit.execute(command)
@@ -975,7 +975,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val convertCommand = "-y -i $outputFilePath $outputFilePath.wav"
                 FFmpegKit.execute(convertCommand)
             }
-        }
+//        }
     }
 
     private fun convertTimestampToSeconds(timestamp: String): Int {
@@ -1600,11 +1600,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            }
 
         locators.subList(0, indexRange.first()).clear()
-        Timber.d("Transcription for: "+transcription)
-//        Timber.d("Transcription for: "+matchedDebugTest.toString())
-//        Timber.d("Transcription for: "+matchedIndexs.toString())
-        Timber.d("Transcription for: "+matchedLocators.map { it.text.highlight.toString() }.toString())
-        Timber.d("Transcription for: "+indexRange.toString())
+//        Timber.d("Transcription for: "+transcription)
+////        Timber.d("Transcription for: "+matchedDebugTest.toString())
+////        Timber.d("Transcription for: "+matchedIndexs.toString())
+//        Timber.d("Transcription for: "+matchedLocators.map { it.text.highlight.toString() }.toString())
+//        Timber.d("Transcription for: "+indexRange.toString())
         Timber.d("Transcription for time taken to transcribe: "+ (System.currentTimeMillis() - startTimeGetContent))
         Timber.d("")
 
@@ -1731,6 +1731,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 if (System.currentTimeMillis() - currentTime >= 100) {
                     currentTime = System.currentTimeMillis()
                     transcribeAudio(timestamp)
+                    if (timestamp == timestamps.last()) {
+                        break
+                    }
                 }
             }
             Timber.d("Transcription for timestamp: " + timestamp)
