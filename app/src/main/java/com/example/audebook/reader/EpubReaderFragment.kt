@@ -100,6 +100,8 @@ import com.arthenica.ffmpegkit.FFmpegKit
 import com.example.audebook.domain.Bookshelf
 //import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationRetriever
+import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
+import com.example.audebook.reader.tts.TtsPreferencesEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -112,11 +114,18 @@ import java.io.IOException
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.first
+import org.readium.navigator.media.tts.android.AndroidTtsPreferences
+import org.readium.navigator.media.tts.android.AndroidTtsSettings
 import org.readium.r2.navigator.extensions.normalizeLocator
 import org.readium.r2.navigator.preferences.Configurable
 import org.readium.r2.navigator.preferences.TextAlign
 import java.io.InputStream
+import kotlin.collections.orEmpty
 import kotlin.time.Duration.Companion.seconds
+
+import com.example.audebook.reader.preferences.MainPreferencesBottomSheetDialogFragment
+import kotlin.math.abs
 
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -574,9 +583,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     ): Try<AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>, OpeningError> {
 
 
-//        val preferencesManager = ExoPlayerPreferencesManagerFactory(preferencesDataStore(name = "navigator-preferences"))
-//            .createPreferenceManager(bookId)
-//        val initialPreferences = preferencesManager.preferences.value
+        val preferencesManager = ExoPlayerPreferencesManagerFactory(application.readerRepository.preferencesDataStoreRepo)
+            .createPreferenceManager(bookId)
+        val initialPreferences = preferencesManager.preferences.value
 
         val navigatorFactory = AudioNavigatorFactory(
             publication,
@@ -587,9 +596,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             )
         )
 
+
+
+
+
         val navigator = navigatorFactory.createNavigator(
             initialLocator,
-//            initialPreferences
+            initialPreferences
         ).getOrElse {
             return Try.failure(
                 when (it) {
@@ -601,13 +614,29 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             )
         }
 
-//        val initData = MediaReaderInitData(
-//            bookId,
-//            publication,
-//            navigator,
-//            preferencesManager,
-//            navigatorFactory
-//        )
+        val initData = MediaReaderInitData(
+            bookId,
+            publication,
+            navigator,
+            preferencesManager,
+            navigatorFactory
+        )
+
+        val preferencesModel = UserPreferencesViewModel(model.viewModelScope,initData)
+//        val nav = (navigator as? Configurable<ExoPlayerSettings, ExoPlayerPreferences>)
+////        model.s
+//        preferencesModel?.bind(nav,viewLifecycleOwner)
+
+        @Suppress("Unchecked_cast")
+        (navigator as? Configurable<ExoPlayerSettings, ExoPlayerPreferences>)
+            ?.let { navigator ->
+                @Suppress("Unchecked_cast")
+                (preferencesModel as UserPreferencesViewModel<ExoPlayerSettings, ExoPlayerPreferences>)
+                    .bind(navigator, viewLifecycleOwner)
+            }
+
+
+
         return Try.success(navigator)
     }
 
@@ -851,7 +880,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     private fun onSetSpeed(@Suppress("UNUSED_PARAMETER") view: View) {
+        model.viewModelScope.launch {
         val preferencesModel: UserPreferencesViewModel<ExoPlayerSettings, ExoPlayerPreferences>
+
+        val setting = audioNavigator.settings.first()
 
 //        @Suppress("Unchecked_cast")
 //        (model.settings as UserPreferencesViewModel<ExoPlayerSettings, ExoPlayerPreferences>)
@@ -865,8 +897,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    .bind(navigator, viewLifecycleOwner)
 //            }
 
-        model.viewModelScope.launch {
+
 //            audioNavigator.skipForward()
+
+            MainPreferencesBottomSheetDialogFragment()
+                .show(childFragmentManager, "Settings")
         }
     }
 
@@ -1004,7 +1039,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val ranges = mutableListOf<String>()
 
 //        for (i in -15..45 step 15) {
-        for (i in 0..30 step 15) {
+        for (i in 0..15 step 15) {
             val newTimeInSeconds = baseTimeInSeconds + i
             val hours = newTimeInSeconds / 3600
             val minutes = (newTimeInSeconds % 3600) / 60
@@ -1433,6 +1468,42 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        locators.clear()
         audioNavigator.play()
         audioNavigator.pause()
+
+        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
+        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
+
+
+
+        Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
+        Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
+
+        if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
+
+
+            val iterator = publication.content()?.iterator()
+
+
+            model.viewModelScope.launch {
+                while (iterator!!.hasNext()) {
+                    val locator = iterator.next().locator
+                    val progression = locator.locations.totalProgression
+                    if (progression != null) {
+//                Timber.d("Transcription for: " + locator.locations.progression)
+                        // Calculate the difference between locator progression and currentAudioProgression
+                        val difference = progression - currentAudioProgression
+
+                        // Check if the difference is within 5% of currentAudioProgression
+                        if (difference in -0.03..0.03) {
+                            // Execute the logic when the locator is within 5%
+                            Timber.d("Transcription for Locator within 5% of currentAudioProgression: $locator")
+                            navigator.go(locator)
+                            // Break out of the loop
+                            break
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
@@ -1562,7 +1633,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            }
 //        }
 
-        for (locator in locators.slice(0..100)) {
+        var locatorSlice = if (locatorMap.isEmpty()){
+            locators.slice(0..locators.size/2)
+        } else {
+            locators.slice(0..100)
+        }
+        for (locator in locatorSlice) {
             val text = locator.text.highlight.toString()
             if (isSentenceInParagraph(text, transcription)) {
                 matchedLocators.add(locator)
@@ -1721,6 +1797,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     suspend fun loadThenPlayStart(timestamps: List<String>) {
 //        isLoadingInitTranscription = true
         binding.loadingOverlay.visibility = View.VISIBLE
+        audioNavigator.pause()
         if (locators.isEmpty())
             getCurrentVisibleContentRange()
 //        transcribeAudio(timestamp)

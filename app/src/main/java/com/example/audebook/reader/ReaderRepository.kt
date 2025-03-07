@@ -50,6 +50,8 @@ class ReaderRepository(
     private val preferencesDataStore: DataStore<JetpackPreferences>
 ) {
 
+    val preferencesDataStoreRepo = preferencesDataStore
+
     private val coroutineQueue: CoroutineQueue =
         CoroutineQueue()
 
