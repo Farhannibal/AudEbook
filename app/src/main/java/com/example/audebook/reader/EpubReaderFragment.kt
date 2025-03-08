@@ -125,6 +125,7 @@ import kotlin.collections.orEmpty
 import kotlin.time.Duration.Companion.seconds
 
 import com.example.audebook.reader.preferences.MainPreferencesBottomSheetDialogFragment
+import org.readium.r2.shared.publication.services.content.Content
 import kotlin.math.abs
 
 
@@ -196,6 +197,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private var isFollowingAudio: Boolean = true
     private var lastHighlightUpdate: Long = 0
+
+    lateinit var globalIterator: Content.Iterator
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -316,6 +319,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
+        //        lifecycleScope.launch {
+        globalIterator = publication.content(readerData.initialLocation)!!.iterator()
+//        }
+
         childFragmentManager.fragmentFactory =
             readerData.navigatorFactory.createFragmentFactory(
                 initialLocator = readerData.initialLocation,
@@ -355,6 +362,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     }
                 }
             )
+
+
 
         childFragmentManager.setFragmentResultListener(
             SearchFragment::class.java.name,
@@ -1267,40 +1276,37 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         locators.clear()
         var combinedRange: IntRange? = null
 //        while (iterator!!.hasNext() && i <= 15) {
-        while (iterator!!.hasNext()) {
-            val element = iterator.next()
+        while (globalIterator.hasNext()) {
+            val element = globalIterator.next()
             val string = element.locator.text.highlight.toString()
             val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 //            Timber.d("Transcription for unmerged: " + tokenizedContent.toString())
 //            Timber.d("Transcription for merged: " + mergeRanges(tokenizedContent).toString())
 
             for (range in tokenizedContent) {
-//                if (range.last - range.first < 50) {
-//                    if (combinedRange == null) {
-//                        combinedRange = range
-//                    } else {
-//                        combinedRange = combinedRange.first..range.last
-//                    }
-//                } else {
-//                    if (combinedRange != null) {
-//                        if (combinedRange.last - combinedRange.first >= 50) {
-//                            addLocator(element.locator, string, combinedRange)
-//                            combinedRange = null
-//                        } else {
-//                            combinedRange = combinedRange.first..range.last
-//                        }
-//                    }
-//                    addLocator(element.locator, string, range)
-//                }
                 addLocator(element.locator, string, range)
             }
 
-//            if (combinedRange != null && combinedRange.last - combinedRange.first >= 50) {
-//                addLocator(element.locator, string, combinedRange)
-//                combinedRange = null
-//            }
 
             i++
+            val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
+            val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
+
+//            if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
+            val progression = element.locator.locations.totalProgression
+            if (progression != null && currentAudioProgression != null) {
+//                Timber.d("Transcription for: " + locator.locations.progression)
+                // Calculate the difference between locator progression and currentAudioProgression
+                val difference = progression - currentAudioProgression
+
+                // Check if the difference is within 5% of currentAudioProgression
+                if (difference in -0.03..0.03) {
+                    // Execute the logic when the locator is within 5%
+                    // Break out of the loop
+                    break
+                }
+            }
+//            }
         }
 //        var combinedRange: IntRange? = null
 //        while (iterator!!.hasNext() && i <= 15) {
@@ -1634,7 +1640,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        }
 
         var locatorSlice = if (locatorMap.isEmpty()){
-            locators.slice(0..locators.size/2)
+            locators
         } else {
             locators.slice(0..100)
         }
