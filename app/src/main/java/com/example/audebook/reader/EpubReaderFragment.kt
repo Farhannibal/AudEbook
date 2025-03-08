@@ -200,6 +200,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     lateinit var globalIterator: Content.Iterator
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
             isSearchViewIconified = savedInstanceState.getBoolean(IS_SEARCH_VIEW_ICONIFIED)
@@ -319,9 +320,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
-        //        lifecycleScope.launch {
-        globalIterator = publication.content(readerData.initialLocation)!!.iterator()
-//        }
+
+
 
         childFragmentManager.fragmentFactory =
             readerData.navigatorFactory.createFragmentFactory(
@@ -376,9 +376,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     Locator::class.java
                 )?.let {
                     navigator.go(it)
+
                 }
             }
         )
+
+
 
         super.onCreate(savedInstanceState)
     }
@@ -401,6 +404,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
         navigator = childFragmentManager.findFragmentByTag(NAVIGATOR_FRAGMENT_TAG) as EpubNavigatorFragment
+
+
 
 
 //        navigator.currentLocator.value
@@ -438,6 +443,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
+
+
         val loadingIcon = view.findViewById<ImageView>(R.id.imageView3)
         val drawable = loadingIcon.drawable
         if (drawable is AnimatedVectorDrawable) {
@@ -473,8 +480,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                             return true
                         }
                         R.id.debugButton -> {
-//                            getCurrentVisibleContentRange()
-                            Timber.d("")
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                getCurrentVisibleContentRange()
+                                Timber.d("")
+                            }
 
                             return true
                         }
@@ -1149,6 +1158,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
         binding.loadAudioBook.visibility = View.GONE
+
+
     }
 
     val channel: Channel<Bookshelf.Event> =
@@ -1242,7 +1253,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-    suspend fun getCurrentVisibleContentRange() {
+    suspend fun getCurrentVisibleContentRange(full: Boolean = false) {
 //        model.viewModelScope.launch {
         // Display page number labels if the book contains a `page-list` navigation document.
 //            (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
@@ -1252,17 +1263,23 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            )
 
 
-        val start = if (locators.isNotEmpty()) {
-            locators[0]
+//        val start = if (locators.isNotEmpty()) {
+//            locators[0]
+//
+//        } else {
+//            (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+//        }
 
-        } else {
-            (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+        if (!::globalIterator.isInitialized){
+                globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
         }
 
-        val content = publication.content(start)
+//        val content = publication.content(start)
 //        val firstVisibleIndex = publication.content()?.elements()?.indexOfFirst { it.locator == start } as Int
 //        val content = publication.content(publication.content()?.elements()[firstVisibleIndex - 2]?.locator)
 
+        val progressionRange = if (full) { -1.00..1.00 }
+        else { -0.03..0.03 }
 
 
         val tokenizer = DefaultTextContentTokenizer(
@@ -1270,125 +1287,76 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             language = Language(Locale.ENGLISH)
         )
 
-        var i = 0
+//        var i = 0
 
-        val iterator = content?.iterator()
-        locators.clear()
-        var combinedRange: IntRange? = null
+//        val iterator = content?.iterator()
+//        locators.clear()
+//        var combinedRange: IntRange? = null
+        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
+        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
+
+        if (currentEpubProgress != null && currentAudioProgression !=null) {
+            if (currentEpubProgress - currentAudioProgression >= 0.2) {
+                globalIterator = publication.content()!!.iterator()
+            }
+        }
+
 //        while (iterator!!.hasNext() && i <= 15) {
         while (globalIterator.hasNext()) {
             val element = globalIterator.next()
-            val string = element.locator.text.highlight.toString()
-            val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 //            Timber.d("Transcription for unmerged: " + tokenizedContent.toString())
 //            Timber.d("Transcription for merged: " + mergeRanges(tokenizedContent).toString())
 
-            for (range in tokenizedContent) {
-                addLocator(element.locator, string, range)
-            }
 
 
-            i++
-            val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
-            val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
+            Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
+            Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
 
 //            if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
             val progression = element.locator.locations.totalProgression
+
             if (progression != null && currentAudioProgression != null) {
-//                Timber.d("Transcription for: " + locator.locations.progression)
+                Timber.d("Transcription for: " + progression)
                 // Calculate the difference between locator progression and currentAudioProgression
                 val difference = progression - currentAudioProgression
 
                 // Check if the difference is within 5% of currentAudioProgression
-                if (difference in -0.03..0.03) {
+                if (difference in progressionRange) {
                     // Execute the logic when the locator is within 5%
                     // Break out of the loop
                     break
                 }
             }
+        }
+
+        while (globalIterator.hasNext()) {
+                val element = globalIterator.next()
+                val string = element.locator.text.highlight.toString()
+                val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
+
+            for (range in tokenizedContent) {
+                addLocator(element.locator, string, range)
+            }
+
+            val progression = element.locator.locations.totalProgression
+
+            if (progression != null && currentAudioProgression != null) {
+                Timber.d("Transcription for: " + progression)
+                // Calculate the difference between locator progression and currentAudioProgression
+                val difference = progression - currentAudioProgression
+
+                // Check if the difference is within 5% of currentAudioProgression
+                if (difference !in progressionRange) {
+                    // Execute the logic when the locator is within 5%
+                    // Break out of the loop
+                    break
+                }
+            }
+
+
 //            }
         }
-//        var combinedRange: IntRange? = null
-//        while (iterator!!.hasNext() && i <= 15) {
-//            val element = iterator.next()
-//            val string = element.locator.text.highlight.toString()
-//            val tokenizedContent = tokenizer.tokenize(string)
-//
-//            for (range in tokenizedContent) {
-//
-//                if (range.last - range.first < 50) {
-//                    if (combinedRange == null) {
-//                        combinedRange = range
-//                    } else {
-//                        combinedRange = combinedRange.first..range.last
-//                    }
-//                } else {
-//                    if (combinedRange != null) {
-//                        addLocator(element.locator, string, combinedRange)
-//                        combinedRange = null
-//                    }
-//                    addLocator(element.locator, string, range)
-//                }
-//            }
-//
-//            if (combinedRange != null) {
-//                addLocator(element.locator, string, combinedRange)
-//                combinedRange = null
-//            }
-//
-//            i++
-//        }
 
-//            while (iterator!!.hasNext() && i <= 15) {
-//                val element = iterator.next()
-//                val string = element.locator.text.highlight.toString()
-////                val wordCount = string.split(" ").count()
-//                val tokenizedContent = tokenizer.tokenize(element.locator.text.highlight.toString())
-//                for (range in tokenizedContent) {
-//
-//                    val contextSnippetLength = 50
-//
-//                    val after = string.substring(
-//                        range.last,
-//                        (range.last + contextSnippetLength).coerceAtMost(string.length)
-//                    )
-//                    val before = string.substring(
-//                        (range.first - contextSnippetLength).coerceAtLeast(0),
-//                        range.first
-//                    )
-//                    val subLocator = Locator.Text(
-//                        after = after.takeIf { it.isNotEmpty() },
-//                        before = before.takeIf { it.isNotEmpty() },
-//                        highlight = string.substring(range)
-//                    )
-//                    locators.add(element.locator.copy(text = subLocator))
-//                }
-//
-//                i = i + 1
-//            }
-
-//            if (!locators.isEmpty()) {
-//
-//                val random = Random.Default
-//                val decorations: List<Decoration> = locators.map { locator ->
-//                    Decoration(
-//                        id = "tts",
-//                        locator = locator,
-//                        style = Decoration.Style.Highlight(
-//                            tint = Color.rgb(
-//                                random.nextInt(256),
-//                                random.nextInt(256),
-//                                random.nextInt(256)
-//                            )
-//                        )
-//                    )
-//                }
-//
-//                navigator.applyDecorations(
-//                    decorations,
-//                    "tts"
-//                )
-//            }
         Timber.d("Transcription for: " + locators.toString())
 
 //        }
@@ -1472,43 +1440,54 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     fun onReanchorTranscriptionLocator(@Suppress("UNUSED_PARAMETER") view: View) {
 //        locators.clear()
-        audioNavigator.play()
+//        audioNavigator.play()
         audioNavigator.pause()
 
-        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
-        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
+//        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
+//        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
+//
+//
+//
+//        Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
+//        Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
+//
+//        if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
+//
+//
+//            val iterator = publication.content()?.iterator()
+//
+//
+//            model.viewModelScope.launch {
+//                while (iterator!!.hasNext()) {
+//                    val locator = iterator.next().locator
+//                    val progression = locator.locations.totalProgression
+//                    if (progression != null) {
+////                Timber.d("Transcription for: " + locator.locations.progression)
+//                        // Calculate the difference between locator progression and currentAudioProgression
+//                        val difference = progression - currentAudioProgression
+//
+//                        // Check if the difference is within 5% of currentAudioProgression
+//                        if (difference in -0.01..0.01) {
+//                            // Execute the logic when the locator is within 5%
+//                            Timber.d("Transcription for Locator within 5% of currentAudioProgression: $locator")
+//                            navigator.go(locator)
+//                            // Break out of the loop
+//                            break
+//                        }
+//                    }
+//                }
+//            }
+//        }
 
+        model.viewModelScope.launch {
+            locators.clear()
+            transcriptionMap.clear()
+            locatorMap.clear()
+            binding.loadingOverlay.visibility = View.VISIBLE
+            globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
+            getCurrentVisibleContentRange(true)
 
-
-        Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
-        Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
-
-        if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
-
-
-            val iterator = publication.content()?.iterator()
-
-
-            model.viewModelScope.launch {
-                while (iterator!!.hasNext()) {
-                    val locator = iterator.next().locator
-                    val progression = locator.locations.totalProgression
-                    if (progression != null) {
-//                Timber.d("Transcription for: " + locator.locations.progression)
-                        // Calculate the difference between locator progression and currentAudioProgression
-                        val difference = progression - currentAudioProgression
-
-                        // Check if the difference is within 5% of currentAudioProgression
-                        if (difference in -0.03..0.03) {
-                            // Execute the logic when the locator is within 5%
-                            Timber.d("Transcription for Locator within 5% of currentAudioProgression: $locator")
-                            navigator.go(locator)
-                            // Break out of the loop
-                            break
-                        }
-                    }
-                }
-            }
+            loadThenPlayStart(generateTranscriptionRanges(roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())))
         }
     }
 
@@ -1691,6 +1670,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         Timber.d("")
 
 
+        if (locators.count() < 100)
+            getCurrentVisibleContentRange()
 
         return matchedLocators
     }
