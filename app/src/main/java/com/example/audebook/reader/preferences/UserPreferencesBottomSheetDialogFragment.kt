@@ -48,3 +48,21 @@ class MainPreferencesBottomSheetDialogFragment : UserPreferencesBottomSheetDialo
         checkNotNull(viewModel.settings)
     }
 }
+
+
+class AudioPreferencesBottomSheetDialogFragment : UserPreferencesBottomSheetDialogFragment(
+    "Audio Settings"
+) {
+
+    val viewModel: ReaderViewModel by activityViewModels()
+
+    lateinit var audioPreferencesModel: UserPreferencesViewModel<*, *>
+
+    override val preferencesModel: UserPreferencesViewModel<*, *> by lazy {
+        checkNotNull(audioPreferencesModel)
+    }
+
+    fun setAudioPreferencesModelFunc(model: UserPreferencesViewModel<*, *>){
+        audioPreferencesModel = model
+    }
+}

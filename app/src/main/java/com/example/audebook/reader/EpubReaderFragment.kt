@@ -14,7 +14,6 @@ import android.content.res.AssetManager
 import android.database.Cursor
 import android.graphics.Color
 import android.graphics.drawable.AnimatedVectorDrawable
-import android.graphics.drawable.AnimationDrawable
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -100,8 +99,8 @@ import com.arthenica.ffmpegkit.FFmpegKit
 import com.example.audebook.domain.Bookshelf
 //import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationRetriever
+import com.example.audebook.reader.preferences.AudioPreferencesBottomSheetDialogFragment
 import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
-import com.example.audebook.reader.tts.TtsPreferencesEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -115,18 +114,11 @@ import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
-import org.readium.navigator.media.tts.android.AndroidTtsPreferences
-import org.readium.navigator.media.tts.android.AndroidTtsSettings
-import org.readium.r2.navigator.extensions.normalizeLocator
 import org.readium.r2.navigator.preferences.Configurable
-import org.readium.r2.navigator.preferences.TextAlign
 import java.io.InputStream
-import kotlin.collections.orEmpty
 import kotlin.time.Duration.Companion.seconds
 
-import com.example.audebook.reader.preferences.MainPreferencesBottomSheetDialogFragment
 import org.readium.r2.shared.publication.services.content.Content
-import kotlin.math.abs
 
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -199,6 +191,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private var lastHighlightUpdate: Long = 0
 
     lateinit var globalIterator: Content.Iterator
+
+    lateinit var audioDialog: AudioPreferencesBottomSheetDialogFragment
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -640,6 +634,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             navigatorFactory
         )
 
+
         val preferencesModel = UserPreferencesViewModel(model.viewModelScope,initData)
 //        val nav = (navigator as? Configurable<ExoPlayerSettings, ExoPlayerPreferences>)
 ////        model.s
@@ -653,7 +648,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     .bind(navigator, viewLifecycleOwner)
             }
 
-
+//        if (preferencesModel != null) {
+        audioDialog = AudioPreferencesBottomSheetDialogFragment()
+        audioDialog.setAudioPreferencesModelFunc(preferencesModel!!)
+//            Timber.d(AudioPreferencesBottomSheetDialogFragment().audioPreferencesModel.toString())
+//        }
 
         return Try.success(navigator)
     }
@@ -899,9 +898,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private fun onSetSpeed(@Suppress("UNUSED_PARAMETER") view: View) {
         model.viewModelScope.launch {
-        val preferencesModel: UserPreferencesViewModel<ExoPlayerSettings, ExoPlayerPreferences>
-
-        val setting = audioNavigator.settings.first()
 
 //        @Suppress("Unchecked_cast")
 //        (model.settings as UserPreferencesViewModel<ExoPlayerSettings, ExoPlayerPreferences>)
@@ -918,8 +914,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 //            audioNavigator.skipForward()
 
-            MainPreferencesBottomSheetDialogFragment()
-                .show(childFragmentManager, "Settings")
+//            MainPreferencesBottomSheetDialogFragment().con
+            audioDialog.show(childFragmentManager, "Settings")
+//            MainPreferencesBottomSheetDialogFragment()
+//                .show(childFragmentManager, "Settings")
         }
     }
 
@@ -1270,8 +1268,18 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            (navigator as? VisualNavigator)?.firstVisibleElementLocator()
 //        }
 
+        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
+        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
+
+
+
         if (!::globalIterator.isInitialized){
-                globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
+            globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
+            if (currentEpubProgress != null && currentAudioProgression !=null) {
+                if (currentEpubProgress - currentAudioProgression >= 0.2) {
+                    globalIterator = publication.content()!!.iterator()
+                }
+            }
         }
 
 //        val content = publication.content(start)
@@ -1292,14 +1300,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        val iterator = content?.iterator()
 //        locators.clear()
 //        var combinedRange: IntRange? = null
-        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
-        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
 
-        if (currentEpubProgress != null && currentAudioProgression !=null) {
-            if (currentEpubProgress - currentAudioProgression >= 0.2) {
-                globalIterator = publication.content()!!.iterator()
-            }
-        }
 
 //        while (iterator!!.hasNext() && i <= 15) {
         while (globalIterator.hasNext()) {
@@ -1671,7 +1672,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
         if (locators.count() < 100)
-            getCurrentVisibleContentRange()
+            getCurrentVisibleContentRange(true)
 
         return matchedLocators
     }
@@ -1861,8 +1862,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
-        if (locators.count() < 100)
-            getCurrentVisibleContentRange()
+//        if (locators.count() < 100)
+//            getCurrentVisibleContentRange()
     }
 
 }
