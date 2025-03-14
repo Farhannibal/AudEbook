@@ -354,9 +354,10 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 
 //                    val inputFilePath = "data/user/0/com.example.audebook/files/b901dd88-80c9-44b6-94fc-46bd4d609a96.m4a"
                     val inputFilePath =
-                        getFilePathFromContentUri(requireContext(),Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()))
+                        getFilePathFromContentUri(requireContext(),Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString())).toString()
+                    val inputFileType = inputFilePath.substringAfterLast('.', "")
                     val outputFilePath =
-                        sdcardDataFolder.getAbsolutePath() + "/extracted_segment.m4a"
+                        sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
                     val timestamp = binding.timelinePosition.text.toString()
                     val duration = 15
 
@@ -368,7 +369,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
                         startTimeInSeconds % 60
                     )
 //d
-                    extractAudioSegment(inputFilePath.toString(), outputFilePath, startTimeFormatted, duration)
+                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
 //d
 
 
@@ -461,12 +462,21 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
         duration: Int
     ) {
         withContext(Dispatchers.IO) {
-            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i $inputFilePath  -t $duration -c copy $outputFilePath"
+//            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i $inputFilePath  -t $duration -c copy $outputFilePath"
+//            Timber.d(command)
+//            FFmpegKit.execute(command)
+//
+//            if (!outputFilePath.endsWith(".wav")){
+//                // TODODODODODOODO
+//                val convertCommand = "-y -i $outputFilePath $outputFilePath.wav"
+//                FFmpegKit.execute(convertCommand)
+//            }
+
+            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -c copy -movflags faststart $outputFilePath"
             Timber.d(command)
             FFmpegKit.execute(command)
 
             if (!outputFilePath.endsWith(".wav")){
-                // TODODODODODOODO
                 val convertCommand = "-y -i $outputFilePath $outputFilePath.wav"
                 FFmpegKit.execute(convertCommand)
             }
@@ -513,10 +523,10 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 //                    val inputFilePath =
 //                        publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()
                     val inputFilePath =
-                        getFilePathFromContentUri(requireContext(),Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()))
-//                    val inputFileType = inputFilePath.substringAfterLast('.', "")
+                        getFilePathFromContentUri(requireContext(),Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString())).toString()
+                    val inputFileType = inputFilePath.substringAfterLast('.', "")
                     val outputFilePath =
-                        sdcardDataFolder.absolutePath + "/extracted_segment.m4a"
+                        sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
                     val timestamp = binding.timelinePosition.text.toString()
                     val duration = 15
 
@@ -528,7 +538,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
                         startTimeInSeconds % 60
                     )
 
-                    extractAudioSegment(inputFilePath.toString(), outputFilePath, startTimeFormatted, duration)
+                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
 
                     mWhisper?.apply {
                         setFilePath(outputFilePath + ".wav")
