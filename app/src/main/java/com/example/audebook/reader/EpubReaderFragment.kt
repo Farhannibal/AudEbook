@@ -1435,7 +1435,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             highlight = string.substring(range)
         )
 
-        Timber.d("Transcription for currentLocatorPosition: " + element)
+        Timber.d("Transcription for addLocator: " + element)
         locators.add(element.copy(text = subLocator))
     }
 
@@ -1882,8 +1882,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val currentAudioPosition = audioNavigator.currentLocator.value
         val currentEPubPosition = navigator.currentLocator.value
 
+//        Timber.d("Transcription for navSetting: "+navigator.settings.value)
 
-
+        val settingsScroll = navigator.settings.value.scroll
 
 
 //        Timber.d("Transcription for navSetting"+navigator.settings.value.textAlign.toString())
@@ -1896,13 +1897,24 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                 var pageLocator = matchedLocators[0]
 
-                if (pageLocators != null)
-                    pageLocator = pageLocators[0]
+                if (settingsScroll && pageLocators != null)
+//                    if(((pageLocators[0].locations.progression ?: 0.0) - (pageLocator.locations.progression ?: 0.0)) < 0.001)
+                    if((pageLocators[0].href == pageLocator.href))
+                        pageLocator = pageLocators[0]
 
-                Timber.d("Transcription for currentAudioPosition: " + currentAudioPosition.toString())
+                Timber.d("Transcription for currentAudioPosition: " + currentAudioPosition.locations.totalProgression)
                 Timber.d("Transcription for currentEPubPosition: " + currentEPubPosition.locations.position)
-                Timber.d("Transcription for currentLocatorPosition: " + pageLocator.locations.position)
-
+//                Timber.d("Transcription for currentmatchedLocators[0]: " + matchedLocators[0].href)
+//                Timber.d("Transcription for currentLocatorPosition: " + pageLocators?.get(0)?.href)
+//                Timber.d("Transcription for testCompare: " + (pageLocators?.get(0)?.href == matchedLocators[0].href).toString())
+//                if (pageLocators != null) {
+//                    val numCompare = ((pageLocators[0].locations.progression
+//                        ?: 0.0) - ((matchedLocators[0].locations.progression ?: 0.0)))
+//
+//                    val testCompare = (numCompare < 0.001)
+//                    Timber.d("Transcription for numCompare: " + numCompare.toString())
+//                    Timber.d("Transcription for testCompare: " + testCompare.toString())
+//                }
 
 //                publication.normalizeLocator(matchedLocators[0])
 //                val iterator = publication.content(matchedLocators[0])?.iterator()
