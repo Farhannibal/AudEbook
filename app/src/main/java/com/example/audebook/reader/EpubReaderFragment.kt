@@ -262,7 +262,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                     lifecycleScope.launch(Dispatchers.Main) {
 //                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
                                         transcriptionMap[currentTranscribeSegment] = result
-                                        locatorMap[currentTranscribeSegment] = syncTranscriptionWithLocator(result)
+                                        locatorMap[currentTranscribeSegment] = syncTranscriptionWithLocator(result,currentTranscribeSegment)
 
 //                                        if (isLoadingInitTranscription && (transcriptionMap.count() <=2)){
 //                                            transcribeAudio(getNext15SecondInterval(currentTranscribeSegment, 1))
@@ -1606,7 +1606,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         animator.start()
     }
 
-    suspend fun syncTranscriptionWithLocator(transcription: String): List<Locator>{
+    suspend fun syncTranscriptionWithLocator(transcription: String, timestamp: String): List<Locator>{
         val startTimeGetContent = System.currentTimeMillis()
 //        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
 //            navigator.applyDecorations(
@@ -1619,6 +1619,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         var matchedLocators = mutableListOf<Locator>()
         val matchedDebugTest = mutableListOf<String>()
         val matchedIndexs = mutableListOf<Int>()
+
+        val prevSegment = getNext15SecondInterval(timestamp, -1)
 
 //        for (locator in locators) {
 //            val text = locator.text.highlight.toString()
@@ -1675,13 +1677,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         Timber.d("Transcription for locators.count():" + locators.count())
 
-        if (locators.count() < 100)
+        if (locators.count() < 50)
             getCurrentVisibleContentRange(true)
 
         var locatorSlice = if (locatorMap.isEmpty()){
             locators
         } else {
-            locators.slice(0..100)
+            locators.slice(0..50)
         }
         for (locator in locatorSlice) {
             val text = locator.text.highlight.toString()
@@ -1719,6 +1721,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    "tts"
 //                )
 //            }
+
+        if (locatorMap.containsKey(prevSegment)){
+            locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
+                addAll(locators.subList(0, indexRange.first()))
+            }
+        }
 
         locators.subList(0, indexRange.first()).clear()
 //        Timber.d("Transcription for: "+transcription)
@@ -1831,6 +1839,47 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 if (gap > 1 && gap <= marginOfError + 1) {
                     for (j in 1 until gap) {
                         filledRun.add(longestRun[i] + j)
+                    }
+                }
+            }
+        }
+
+        // Ensure the filled run is sorted and contains no duplicates
+        return filledRun.distinct().sorted()
+    }
+
+    fun findFirstRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
+        if (indices.isEmpty()) return emptyList()
+
+        val sortedIndices = indices.sorted()
+        val firstRun = mutableListOf<Int>()
+
+        // Start with the first index
+        firstRun.add(sortedIndices[0])
+
+        // Iterate through the sorted indices and fill gaps within the margin of error
+        for (i in 1 until sortedIndices.size) {
+            val previousIndex = firstRun.last()
+            val currentIndex = sortedIndices[i]
+
+            if (currentIndex - previousIndex <= marginOfError + 1) {
+                // Add the current index to the run if it's within the margin of error
+                firstRun.add(currentIndex)
+            } else {
+                // Stop as soon as the first run ends
+                break
+            }
+        }
+
+        // Fill in any gaps within the margin of error
+        val filledRun = mutableListOf<Int>()
+        for (i in firstRun.indices) {
+            filledRun.add(firstRun[i])
+            if (i < firstRun.size - 1) {
+                val gap = firstRun[i + 1] - firstRun[i]
+                if (gap > 1 && gap <= marginOfError + 1) {
+                    for (j in 1 until gap) {
+                        filledRun.add(firstRun[i] + j)
                     }
                 }
             }
