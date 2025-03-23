@@ -710,11 +710,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     if(locatorMap.containsKey(getNext15SecondInterval(playbackTranscribeSegment, -2))) {
                         highlightText(
                             locatorMap[playbackTranscribeSegment],
-                            locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -2)]
+                            locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -2)],
+                            locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)]
                         )
                     }else if(locatorMap.containsKey(getNext15SecondInterval(playbackTranscribeSegment, -1))) {
                         highlightText(
                             locatorMap[playbackTranscribeSegment],
+                            locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)],
                             locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)]
                         )
                     }else {
@@ -1920,14 +1922,17 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         audioNavigator.play()
     }
 
-    suspend fun highlightText(matchedLocators: List<Locator>?, pageLocators: List<Locator>? = null) {
+    suspend fun highlightText(matchedLocators: List<Locator>?, pageLocators: List<Locator>? = null,prevLocators: List<Locator>? = null) {
         (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
         navigator.applyDecorations(
             listOfNotNull(null),
             "tts"
         )
 
-
+//
+//                TOOOOOOOOOOO DOOOOOOOOOOOOOOOOOO
+//                   Remove overlap from Previous Locator
+//
         val currentAudioPosition = audioNavigator.currentLocator.value
         val currentEPubPosition = navigator.currentLocator.value
 
@@ -1977,8 +1982,14 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                navigator.go(locatorToGoTo, true)
 //                navigator.goBackward(true)
 
+                var updatedMatchedLocators = matchedLocators
+
+                if (prevLocators != null && prevLocators.size >= 2){
+                    updatedMatchedLocators = prevLocators.takeLast(2) + matchedLocators
+                }
+
                 val random = Random.Default
-                val decorations: List<Decoration> = matchedLocators.map { locator ->
+                val decorations: List<Decoration> = updatedMatchedLocators.map { locator ->
                     Decoration(
                         id = "tts",
                         locator = locator,
@@ -1992,10 +2003,15 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     )
                 }
 
+
+
                 navigator.applyDecorations(
                     decorations,
                     "tts"
                 )
+
+
+
             }
         }
 
