@@ -472,12 +472,13 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 //                FFmpegKit.execute(convertCommand)
 //            }
 
-            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -c copy -movflags faststart $outputFilePath"
+            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -vn -c copy $outputFilePath"
             Timber.d(command)
             FFmpegKit.execute(command)
 
             if (!outputFilePath.endsWith(".wav")){
                 val convertCommand = "-y -i $outputFilePath $outputFilePath.wav"
+                Timber.d(convertCommand)
                 FFmpegKit.execute(convertCommand)
             }
         }
@@ -485,9 +486,19 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 
     private fun convertTimestampToSeconds(timestamp: String): Int {
         Timber.d(timestamp)
-        var parts = timestamp.split(":").map { it.toInt() }
-        if (parts.size != 3)
-            parts = "00:00:00".split(":").map { it.toInt() }
+        var parts = timestamp.split(":").map { it.toInt() }.toMutableList()
+        if (parts.size != 3) {
+            if (parts.size == 2) {
+//            parts = "00:00:00".split(":").map { it.toInt() }
+                parts.add(0, 0)
+            } else if (parts.size == 1) {
+                parts.add(0, 0)
+                parts.add(0, 0)
+            } else {
+//            parts = "00:00:00".split(":").map { it.toInt() }.toMutableList()
+                parts = mutableListOf(0, 0, 0)
+            }
+        }
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
     }
 

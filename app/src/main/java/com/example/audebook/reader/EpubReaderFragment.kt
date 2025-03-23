@@ -1042,7 +1042,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         duration: Int
     ) {
 //        withContext(Dispatchers.IO) {
-            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -c copy $outputFilePath"
+            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -vn -c copy $outputFilePath"
             Timber.d(command)
             FFmpegKit.execute(command)
 
@@ -1054,16 +1054,42 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     private fun convertTimestampToSeconds(timestamp: String): Int {
-        var parts = timestamp.split(":").map { it.toInt() }
-        if (parts.size != 3)
-            parts = "00:00:00".split(":").map { it.toInt() }
+//        var parts = timestamp.split(":").map { it.toInt() }
+        var parts = timestamp.split(":").map { it.toInt() }.toMutableList()
+        if (parts.size != 3) {
+            if (parts.size == 2) {
+//            parts = "00:00:00".split(":").map { it.toInt() }
+                parts.add(0, 0)
+            } else if (parts.size == 1) {
+                parts.add(0, 0)
+                parts.add(0, 0)
+            } else {
+//            parts = "00:00:00".split(":").map { it.toInt() }.toMutableList()
+                parts = mutableListOf(0, 0, 0)
+            }
+        }
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
     }
 
     private fun roundTimestampToNearest15Seconds(timestamp: String): String {
-        var parts = timestamp.split(":").map { it.toInt() }
-        if (parts.size != 3)
-            parts = "00:00:00".split(":").map { it.toInt() }
+//        var parts = timestamp.split(":").map { it.toInt() }
+//        if (parts.size != 3)
+//            parts = "00:00:00".split(":").map { it.toInt() }
+
+        var parts = timestamp.split(":").map { it.toInt() }.toMutableList()
+        if (parts.size != 3) {
+            if (parts.size == 2) {
+//            parts = "00:00:00".split(":").map { it.toInt() }
+                parts.add(0, 0)
+            } else if (parts.size == 1) {
+                parts.add(0, 0)
+                parts.add(0, 0)
+            } else {
+//            parts = "00:00:00".split(":").map { it.toInt() }.toMutableList()
+                parts = mutableListOf(0, 0, 0)
+            }
+        }
+
         val totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
         val roundedSeconds = (totalSeconds / 15) * 15
 
