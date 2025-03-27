@@ -723,6 +723,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         highlightText(locatorMap[playbackTranscribeSegment])
                     }
                 }
+            } else {
+                model.viewModelScope.launch {
+                    if (!locators.isEmpty())
+                        loadThenPlayStart(listOf(playbackTranscribeSegment,getNext15SecondInterval(playbackTranscribeSegment, 1)))
+                }
             }
         }
 
@@ -1687,7 +1692,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         } else {
             locators.slice(0..50)
         }
+
+//        val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
+
         for (locator in locatorSlice) {
+//            if (locator in prevLocators) continue
+
             val text = locator.text.highlight.toString()
             if (isSentenceInParagraph(text, transcription)) {
                 matchedLocators.add(locator)
@@ -1699,6 +1709,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         val indexRange = findLongestRun(matchedIndexs,5)
         matchedLocators = locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
+
+        // Remove locators from matchedLocators that are in locatorMap[prevSegment]
+        val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
+        matchedLocators = matchedLocators.filter { it !in prevLocators }.toMutableList()
 
 
 //        if (!matchedLocators.isEmpty()) {
