@@ -726,7 +726,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             } else {
                 model.viewModelScope.launch {
                     if (!locators.isEmpty())
-                        loadThenPlayStart(listOf(playbackTranscribeSegment,getNext15SecondInterval(playbackTranscribeSegment, 1)))
+                        loadThenPlayStart(listOf(playbackTranscribeSegment
+                            ,getNext15SecondInterval(playbackTranscribeSegment, 1)
+                            ,getNext15SecondInterval(playbackTranscribeSegment, 2)))
                 }
             }
         }
@@ -990,6 +992,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     private suspend fun transcribeAudio(transcriptionTimestamp: String) {
+        try {
 //        model.viewModelScope.launch {
             if (mWhisper?.isInProgress() == false) {
                 val sdcardDataFolder = withContext(Dispatchers.IO) {
@@ -1001,11 +1004,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     Timber.d(audioNavigator.readingOrder.items[0].toString())
 
 
-
 //                    val inputFilePath =
 //                        audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString()
                     val inputFilePath =
-                        getFilePathFromContentUri(requireContext(),Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())).toString()
+                        getFilePathFromContentUri(
+                            requireContext(),
+                            Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
+                        ).toString()
                     val inputFileType = inputFilePath.substringAfterLast('.', "")
                     val outputFilePath =
                         sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
@@ -1040,6 +1045,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 Timber.d("Whisper is already in progress...!")
             }
 //        }
+        } catch (e: Exception) {
+            Timber.e(e, "Error occurred while transcribing audio")
+        }
     }
 
     private fun extractAudioSegment(
@@ -1112,7 +1120,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val ranges = mutableListOf<String>()
 
 //        for (i in -15..45 step 15) {
-        for (i in 0..15 step 15) {
+        for (i in 0..45 step 15) {
             val newTimeInSeconds = baseTimeInSeconds + i
             val hours = newTimeInSeconds / 3600
             val minutes = (newTimeInSeconds % 3600) / 60
@@ -1708,11 +1716,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         val indexRange = findLongestRun(matchedIndexs,5)
-        matchedLocators = locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
+        if(indexRange.isNotEmpty()) {
+            matchedLocators =
+                locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
 
-        // Remove locators from matchedLocators that are in locatorMap[prevSegment]
-        val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
-        matchedLocators = matchedLocators.filter { it !in prevLocators }.toMutableList()
+            // Remove locators from matchedLocators that are in locatorMap[prevSegment]
+            val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
+            matchedLocators = matchedLocators.filter { it !in prevLocators }.toMutableList()
 
 
 //        if (!matchedLocators.isEmpty()) {
@@ -1738,13 +1748,17 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                )
 //            }
 
-        if (locatorMap.containsKey(prevSegment)){
-            locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
-                addAll(locators.subList(0, indexRange.first()))
+            if (locatorMap.containsKey(prevSegment)) {
+                locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
+                    addAll(locators.subList(0, indexRange.first()))
+                }
             }
-        }
 
-        locators.subList(0, indexRange.first()).clear()
+            locators.subList(0, indexRange.first()).clear()
+
+        } else {
+            matchedLocators.clear()
+        }
 //        Timber.d("Transcription for: "+transcription)
 ////        Timber.d("Transcription for: "+matchedDebugTest.toString())
 ////        Timber.d("Transcription for: "+matchedIndexs.toString())
@@ -1937,11 +1951,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     suspend fun highlightText(matchedLocators: List<Locator>?, pageLocators: List<Locator>? = null,prevLocators: List<Locator>? = null) {
-        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-        navigator.applyDecorations(
-            listOfNotNull(null),
-            "tts"
-        )
+//        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+//        navigator.applyDecorations(
+//            listOfNotNull(null),
+//            "tts"
+//        )
 
 //
 //                TOOOOOOOOOOO DOOOOOOOOOOOOOOOOOO
@@ -1970,8 +1984,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     if((pageLocators[0].href == pageLocator.href))
                         pageLocator = pageLocators[0]
 
-                Timber.d("Transcription for currentAudioPosition: " + currentAudioPosition.locations.totalProgression)
-                Timber.d("Transcription for currentEPubPosition: " + currentEPubPosition.locations.position)
+//                Timber.d("Transcription for currentAudioPosition: " + currentAudioPosition.locations.totalProgression)
+//                Timber.d("Transcription for currentEPubPosition: " + currentEPubPosition.locations.position)
 //                Timber.d("Transcription for currentmatchedLocators[0]: " + matchedLocators[0].href)
 //                Timber.d("Transcription for currentLocatorPosition: " + pageLocators?.get(0)?.href)
 //                Timber.d("Transcription for testCompare: " + (pageLocators?.get(0)?.href == matchedLocators[0].href).toString())
@@ -2002,20 +2016,45 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     updatedMatchedLocators = prevLocators.takeLast(2) + matchedLocators
                 }
 
+                // Concatenate locator.text.highlight into one string separated by spaces
+//                val concatenatedHighlights = updatedMatchedLocators.joinToString(" ") { it.text.highlight.toString() }
+//
+//                val after = updatedMatchedLocators.last().text.after
+//
+//                val before = updatedMatchedLocators.first().text.before
+//
+//                val subLocator = Locator.Text(
+//                    after = after,
+//                    before = before,
+//                    highlight = concatenatedHighlights
+//                )
+//
+//                val highlightSum = matchedLocators[0].copy(text = subLocator)
+//
+//                Timber.d("Transcription for highlightSum: " + highlightSum.toString())
+
                 val random = Random.Default
                 val decorations: List<Decoration> = updatedMatchedLocators.map { locator ->
                     Decoration(
                         id = "tts",
                         locator = locator,
                         style = Decoration.Style.Highlight(
-                            tint = Color.rgb(
-                                random.nextInt(256),
-                                random.nextInt(256),
-                                random.nextInt(256)
-                            )
+                            tint = Color.rgb(124, 198, 247)
                         )
                     )
                 }
+
+//                val decoration = Decoration(
+//                    id = "tts",
+//                    locator = highlightSum,
+//                    style = Decoration.Style.Highlight(tint = Color.rgb(
+//                                random.nextInt(256),
+//                                random.nextInt(256),
+//                                random.nextInt(256)
+//                            ))
+//                )
+
+
 
 
 
@@ -2023,6 +2062,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     decorations,
                     "tts"
                 )
+
+//                navigator.applyDecorations(listOfNotNull(decoration), "tts")
 
 
 
