@@ -993,27 +993,23 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private suspend fun transcribeAudio(transcriptionTimestamp: String) {
         try {
-//        model.viewModelScope.launch {
             if (mWhisper?.isInProgress() == false) {
                 val sdcardDataFolder = withContext(Dispatchers.IO) {
                     context?.getExternalFilesDir(null)
                 }
 
                 if (sdcardDataFolder != null) {
-
                     Timber.d(audioNavigator.readingOrder.items[0].toString())
 
-
-//                    val inputFilePath =
-//                        audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString()
-                    val inputFilePath =
+                    val inputFilePath = withContext(Dispatchers.IO) {
                         getFilePathFromContentUri(
                             requireContext(),
                             Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
-                        ).toString()
+                        )
+                    }.toString()
+
                     val inputFileType = inputFilePath.substringAfterLast('.', "")
-                    val outputFilePath =
-                        sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
+                    val outputFilePath = sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
                     val timestamp = withContext(Dispatchers.Main) {
                         binding.timelinePosition.text.toString()
                     }
@@ -1044,7 +1040,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             } else {
                 Timber.d("Whisper is already in progress...!")
             }
-//        }
         } catch (e: Exception) {
             Timber.e(e, "Error occurred while transcribing audio")
         }
@@ -1561,15 +1556,17 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-    fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
-        var filePath: String? = null
-        val fileName = getFileName(context, contentUri)
-        if (fileName != null) {
-            val file = File(context.filesDir, fileName)
-            filePath = file.absolutePath
-            saveFileFromUri(context, contentUri, file)
+    suspend fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
+        return withContext(Dispatchers.IO) {
+            var filePath: String? = null
+            val fileName = getFileName(context, contentUri)
+            if (fileName != null) {
+                val file = File(context.filesDir, fileName)
+                filePath = file.absolutePath
+                saveFileFromUri(context, contentUri, file)
+            }
+            filePath
         }
-        return filePath
     }
 
     @SuppressLint("Range")
@@ -1951,11 +1948,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     suspend fun highlightText(matchedLocators: List<Locator>?, pageLocators: List<Locator>? = null,prevLocators: List<Locator>? = null) {
-//        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-//        navigator.applyDecorations(
-//            listOfNotNull(null),
-//            "tts"
-//        )
+
 
 //
 //                TOOOOOOOOOOO DOOOOOOOOOOOOOOOOOO
@@ -2034,6 +2027,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                Timber.d("Transcription for highlightSum: " + highlightSum.toString())
 
                 val random = Random.Default
+
+                (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+                navigator.applyDecorations(
+                    listOfNotNull(null),
+                    "tts"
+                )
+
                 val decorations: List<Decoration> = updatedMatchedLocators.map { locator ->
                     Decoration(
                         id = "tts",
