@@ -24,8 +24,8 @@
     <!-- android:networkSecurityConfig is required for r2-lcp-kotlin and r2-navigator-kotlin -->
     <application
         android:name=".Application"
-        android:icon="@mipmap/ic_launcher"
-        android:label="Readium"
+        android:icon="@mipmap/ic_audebook"
+        android:label="AudEBook"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:networkSecurityConfig="@xml/network_security_config"
