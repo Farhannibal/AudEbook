@@ -152,12 +152,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private var seekingItem: Int? = null
 
-    // whisper-tiny.tflite and whisper-base-nooptim.en.tflite works well
-//    private val DEFAULT_MODEL_TO_USE = "whisper-tiny.tflite"
-    // English only model ends with extension ".en.tflite"
-//    private val ENGLISH_ONLY_MODEL_EXTENSION = ".en.tflite"
-//    private val ENGLISH_ONLY_VOCAB_FILE = "filters_vocab_en.bin"
-//    private val MULTILINGUAL_VOCAB_FILE = "filters_vocab_multilingual.bin"
     private val EXTENSIONS_TO_COPY = arrayOf("tflite", "bin", "wav", "pcm")
 
     private var startTime: Long = 0
@@ -194,6 +188,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     lateinit var globalIterator: Content.Iterator
 
     lateinit var audioDialog: AudioPreferencesBottomSheetDialogFragment
+
+    lateinit var inputFilePath: String
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -256,13 +252,14 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                 }
 
                                 override fun onResultReceived(result: String) {
+                                    val cachedCurrentTranscribeSegment = currentTranscribeSegment
                                     val timeTaken = System.currentTimeMillis() - startTime
 //                            handler.post { binding.tvStatus.text = "Processing done in ${timeTaken}ms" }
 
                                     lifecycleScope.launch(Dispatchers.Main) {
 //                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
-                                        transcriptionMap[currentTranscribeSegment] = result
-                                        locatorMap[currentTranscribeSegment] = syncTranscriptionWithLocator(result,currentTranscribeSegment)
+                                        transcriptionMap[cachedCurrentTranscribeSegment] = result
+                                        locatorMap[cachedCurrentTranscribeSegment] = syncTranscriptionWithLocator(result,cachedCurrentTranscribeSegment)
 
 //                                        if (isLoadingInitTranscription && (transcriptionMap.count() <=2)){
 //                                            transcribeAudio(getNext15SecondInterval(currentTranscribeSegment, 1))
@@ -793,9 +790,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             } else {
                 // The map does not contain the key
                 Timber.d("No transcription found for $currentSegment")
-                if (audioNavigator.playback.value.playWhenReady == true) {
-                    transcribeAudio(currentSegment)
-                }
+//                if (audioNavigator.playback.value.playWhenReady == true) {
+                transcribeAudio(currentSegment)
+//                }
                 break
             }
             currentSegment = getNext15SecondInterval(getPlaybackTranscribeSegment(), iterations)
@@ -993,21 +990,30 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private suspend fun transcribeAudio(transcriptionTimestamp: String) {
         try {
-            if (mWhisper?.isInProgress() == false) {
+            if (mWhisper?.isInProgress() == false && !transcriptionMap.containsKey(transcriptionTimestamp)) {
+//                var startTimeGetContent = System.currentTimeMillis()
+//                Timber.d("Transcription for val sdcardDataFolder = withContext(Dispatchers.IO) {")
+
                 val sdcardDataFolder = withContext(Dispatchers.IO) {
                     context?.getExternalFilesDir(null)
                 }
 
+//                Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
                 if (sdcardDataFolder != null) {
-                    Timber.d(audioNavigator.readingOrder.items[0].toString())
+//                    Timber.d(audioNavigator.readingOrder.items[0].toString())
+//                    startTimeGetContent = System.currentTimeMillis()
+//
+//                    Timber.d("Transcription for val inputFilePath = withContext(Dispatchers.IO) {")
+//                    val inputFilePath = withContext(Dispatchers.IO) {
+//                        getFilePathFromContentUri(
+//                            requireContext(),
+//                            Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
+//                        )
+//                    }.toString()
 
-                    val inputFilePath = withContext(Dispatchers.IO) {
-                        getFilePathFromContentUri(
-                            requireContext(),
-                            Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
-                        )
-                    }.toString()
-
+//                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
+//                    startTimeGetContent = System.currentTimeMillis()
+//                    Timber.d("Transcription for val inputFileType = inputFilePath.substringAfterLast(")
                     val inputFileType = inputFilePath.substringAfterLast('.', "")
                     val outputFilePath = sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
                     val timestamp = withContext(Dispatchers.Main) {
@@ -1016,7 +1022,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     val duration = 10
 
                     currentTranscribeSegment = transcriptionTimestamp
-                    transcriptionRange = generateTranscriptionRanges(currentTranscribeSegment)
+//                    transcriptionRange = generateTranscriptionRanges(currentTranscribeSegment)
 
                     val startTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
                     val startTimeFormatted = String.format(
@@ -1028,18 +1034,32 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                     Timber.d(timestamp)
 
+
+//                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
+//                    startTimeGetContent = System.currentTimeMillis()
+//                    Timber.d("Transcription for extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration) ")
                     extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
 
+//                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
+//                    startTimeGetContent = System.currentTimeMillis()
+//                    Timber.d("Transcription for mWhisper?.apply {")
                     mWhisper?.apply {
                         setFilePath(outputFilePath + ".wav")
                         Timber.d(outputFilePath + ".wav")
                         setAction(Whisper.ACTION_TRANSCRIBE)
                         start()
                     }
+//                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
+//                    Timber.d("Transcription for: --------------------------------------------------")
                 }
             } else {
                 Timber.d("Whisper is already in progress...!")
-                Timber.d("Transcription for currentTranscribeSegment: " + currentTranscribeSegment)
+//                Timber.d("Transcription for currentTranscribeSegment1: " + currentTranscribeSegment)
+//                Timber.d("Transcription for currentTranscribeSegment2: " + transcriptionTimestamp)
+                if (transcriptionMap.containsKey(currentTranscribeSegment)){
+                    mWhisper?.stop()
+                    Timber.d("Transcription for currentTranscribeSegment: STOPPPPPP" )
+                }
             }
         } catch (e: Exception) {
             Timber.e(e, "Error occurred while transcribing audio")
@@ -1277,6 +1297,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         binding.loadAudioBook.visibility = View.GONE
 
+        inputFilePath = withContext(Dispatchers.IO) {
+            getFilePathFromContentUri(
+                requireContext(),
+                Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
+            )
+        }.toString()
+
 
     }
 
@@ -1406,7 +1433,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        val firstVisibleIndex = publication.content()?.elements()?.indexOfFirst { it.locator == start } as Int
 //        val content = publication.content(publication.content()?.elements()[firstVisibleIndex - 2]?.locator)
 
-        val progressionRange = if (full) { -1.00..1.00 }
+        val progressionRange = if (full) { 0.10..0.10 }
         else { -0.03..0.03 }
 
 //        val progressionRange = -0.03..0.03
@@ -1813,7 +1840,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        Timber.d("Transcription for: "+matchedLocators.map { it.text.highlight.toString() }.toString())
 //        Timber.d("Transcription for: "+indexRange.toString())
         Timber.d("Transcription for time taken to transcribe: "+ (System.currentTimeMillis() - startTimeGetContent))
-        Timber.d("")
 
 
 
@@ -1981,6 +2007,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 if (System.currentTimeMillis() - currentTime >= 100) {
                     currentTime = System.currentTimeMillis()
                     transcribeAudio(timestamp)
+                    Timber.d("Transcription for loadThenPlayStart: " + timestamp)
                     if (timestamp == timestamps.last()) {
                         break
                     }
