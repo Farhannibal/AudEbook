@@ -131,8 +131,7 @@
                     android:layout_weight="1"
                     android:background="@android:color/transparent"
                     android:contentDescription="Transcribe"
-                    app:srcCompat="@drawable/media3_icon_closed_captions"
-                    app:tint="#000000" />
+                    app:srcCompat="@drawable/ic_baseline_anchor_24" />
 
                 <ImageButton
                     android:id="@+id/skipBackward"
@@ -171,8 +170,7 @@
                     android:layout_weight="1"
                     android:background="@android:color/transparent"
                     android:contentDescription="Transcribe"
-                    android:src="@drawable/media3_icon_playback_speed_1_0"
-                    app:tint="#000000" />
+                    android:src="@drawable/media3_icon_playback_speed_1_0" />
 
             </LinearLayout>
 
