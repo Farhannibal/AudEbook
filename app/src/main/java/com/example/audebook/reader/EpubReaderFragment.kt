@@ -706,18 +706,18 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 model.viewModelScope.launch {
                     if(locatorMap.containsKey(getNext15SecondInterval(playbackTranscribeSegment, -2))) {
                         highlightText(
-                            locatorMap[playbackTranscribeSegment],
+                            locatorMap[playbackTranscribeSegment],playbackTranscribeSegment,
                             locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -2)],
                             locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)]
                         )
                     }else if(locatorMap.containsKey(getNext15SecondInterval(playbackTranscribeSegment, -1))) {
                         highlightText(
-                            locatorMap[playbackTranscribeSegment],
+                            locatorMap[playbackTranscribeSegment],playbackTranscribeSegment,
                             locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)],
                             locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)]
                         )
                     }else {
-                        highlightText(locatorMap[playbackTranscribeSegment])
+                        highlightText(locatorMap[playbackTranscribeSegment],playbackTranscribeSegment)
                     }
                 }
             } else {
@@ -998,8 +998,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     context?.getExternalFilesDir(null)
                 }
 
+                if(transcriptionMap.isEmpty())
+                    currentTranscribeSegment = transcriptionTimestamp
+                if (transcriptionMap.containsKey(currentTranscribeSegment))
+                    currentTranscribeSegment = transcriptionTimestamp
+
 //                Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
-                if (sdcardDataFolder != null) {
+                if (sdcardDataFolder != null && currentTranscribeSegment == transcriptionTimestamp) {
 //                    Timber.d(audioNavigator.readingOrder.items[0].toString())
 //                    startTimeGetContent = System.currentTimeMillis()
 //
@@ -1051,6 +1056,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     }
 //                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
 //                    Timber.d("Transcription for: --------------------------------------------------")
+                } else {
+                    Timber.d("Transcription for currentTranscribeSegment: Still Adding currentTranscribeSegment" )
                 }
             } else {
                 Timber.d("Whisper is already in progress...!")
@@ -1433,7 +1440,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        val firstVisibleIndex = publication.content()?.elements()?.indexOfFirst { it.locator == start } as Int
 //        val content = publication.content(publication.content()?.elements()[firstVisibleIndex - 2]?.locator)
 
-        val progressionRange = if (full) { 0.10..0.10 }
+        val progressionRange = if (full) { -0.10..0.10 }
         else { -0.03..0.03 }
 
 //        val progressionRange = -0.03..0.03
@@ -2025,7 +2032,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         audioNavigator.play()
     }
 
-    suspend fun highlightText(matchedLocators: List<Locator>?, pageLocators: List<Locator>? = null,prevLocators: List<Locator>? = null) {
+    suspend fun highlightText(matchedLocators: List<Locator>?,playbackTranscribeSegment: String, pageLocators: List<Locator>? = null,prevLocators: List<Locator>? = null) {
 
 
 //
@@ -2043,6 +2050,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        Timber.d("Transcription for navSetting"+navigator.settings.value.textAlign.toString())
 //        val epubPreferences = EpubPreferences
 //        navigator.submitPreferences()
+
+        val nextSegment = getNext15SecondInterval(playbackTranscribeSegment, 1)
+        val nextLocators = locatorMap.getOrDefault(nextSegment,listOf<Locator>())
 
 
         matchedLocators?.isEmpty()?.let {
@@ -2085,7 +2095,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 var updatedMatchedLocators = matchedLocators
 
                 if (prevLocators != null && prevLocators.size >= 2){
-                    updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators).distinct()
+                    updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators + nextLocators).distinct()
                 }
 
                 // Concatenate locator.text.highlight into one string separated by spaces
