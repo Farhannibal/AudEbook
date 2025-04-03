@@ -8,6 +8,27 @@
 
     <!-- Base application theme. -->
     <style name="AppTheme" parent="Theme.Material3.DayNight">
+<!--    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight">-->
+
+        <!-- Set your default primary and secondary colors -->
+<!--        <item name="colorPrimary">#1B1B1B</item>-->
+<!--        <item name="colorPrimaryVariant">#494949</item>-->
+<!--        <item name="colorOnPrimary">#4B4B4B</item>-->
+<!--        <item name="colorSecondary">#4B4B4B</item>-->
+<!--        <item name="colorSecondaryVariant">#424242</item>-->
+<!--        <item name="colorOnSecondary">#000000</item>-->
+
+        <!-- Optional: Set default background and surface colors -->
+<!--        <item name="colorBackground">#FFFFFF</item>-->
+<!--        <item name="colorSurface">#000000</item>-->
+<!--        <item name="colorOnBackground">#000000</item>-->
+<!--        <item name="colorOnSurface">#000000</item>-->
+
+<!--        &lt;!&ndash; Set default text color &ndash;&gt;-->
+<!--        <item name="android:textColor">#4B4B4B</item>-->
+<!--        <item name="android:tint">#4B4B4B</item> &lt;!&ndash; Example: Dark background &ndash;&gt;-->
+
+
 
     </style>
 

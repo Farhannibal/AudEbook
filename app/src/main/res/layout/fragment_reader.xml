@@ -57,8 +57,10 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
+                    android:alpha="0.7"
                     android:minWidth="40dp"
                     android:text="@string/zero"
+                    android:textColor="#BF4B4B4B"
                     app:layout_constraintBottom_toBottomOf="@+id/publicationTitle"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="@+id/publicationTitle" />
@@ -85,8 +87,10 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="16dp"
+                    android:alpha="0.7"
                     android:minWidth="40dp"
                     android:text="@string/zero"
+                    android:textColor="#BF4B4B4B"
                     app:layout_constraintBottom_toBottomOf="@+id/publicationTitle"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintTop_toTopOf="@+id/publicationTitle" />
@@ -98,7 +102,12 @@
                     android:layout_marginStart="8dp"
                     android:layout_marginTop="8dp"
                     android:layout_marginEnd="8dp"
+                    android:alpha="0.7"
                     android:contentDescription="@string/seek_bar"
+                    android:foregroundTint="#BF4B4B4B"
+                    android:indeterminateTint="#1F4B4B4B"
+                    android:progressTint="#BF4B4B4B"
+                    android:thumbTint="#BF4B4B4B"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@+id/publicationTitle" />
@@ -129,8 +138,10 @@
                     android:layout_width="30dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
+                    android:alpha="0.7"
                     android:background="@android:color/transparent"
                     android:contentDescription="Transcribe"
+                    android:tint="#BF4B4B4B"
                     app:srcCompat="@drawable/ic_baseline_anchor_24" />
 
                 <ImageButton
@@ -138,39 +149,47 @@
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
+                    android:alpha="0.7"
                     android:background="@android:color/transparent"
                     android:contentDescription="@string/go_backward_30_seconds"
                     android:scaleType="fitCenter"
-                    android:src="@drawable/outline_replay_30_24" />
+                    android:src="@drawable/outline_replay_30_24"
+                    android:tint="#BF4B4B4B" />
 
                 <ImageButton
                     android:id="@+id/playPause"
                     android:layout_width="50dp"
                     android:layout_height="70dp"
                     android:layout_weight="1"
+                    android:alpha="0.7"
                     android:background="@android:color/transparent"
                     android:contentDescription="@string/play_or_pause"
                     android:scaleType="fitCenter"
-                    android:src="@drawable/ic_baseline_pause_24" />
+                    android:src="@drawable/ic_baseline_pause_24"
+                    android:tint="#BF4B4B4B" />
 
                 <ImageButton
                     android:id="@+id/skipForward"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
+                    android:alpha="0.7"
                     android:background="@android:color/transparent"
                     android:contentDescription="@string/go_forward_30_seconds"
                     android:scaleType="fitCenter"
-                    android:src="@drawable/outline_forward_30_24" />
+                    android:src="@drawable/outline_forward_30_24"
+                    android:tint="#BF4B4B4B" />
 
                 <ImageButton
                     android:id="@+id/setSpeed"
                     android:layout_width="30dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
+                    android:alpha="0.7"
                     android:background="@android:color/transparent"
                     android:contentDescription="Transcribe"
-                    android:src="@drawable/media3_icon_playback_speed_1_0" />
+                    android:src="@drawable/media3_icon_playback_speed_1_0"
+                    android:tint="#BF4B4B4B" />
 
             </LinearLayout>
 
