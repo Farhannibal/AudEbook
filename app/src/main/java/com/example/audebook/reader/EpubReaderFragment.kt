@@ -115,6 +115,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
 import org.readium.r2.navigator.preferences.Configurable
+import org.readium.r2.navigator.preferences.Preference
 import java.io.InputStream
 import kotlin.time.Duration.Companion.seconds
 
@@ -190,6 +191,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     lateinit var audioDialog: AudioPreferencesBottomSheetDialogFragment
 
     lateinit var inputFilePath: String
+
+    var currentHighlight:  List<Locator> = listOf<Locator>()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -781,7 +784,20 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         var currentSegment = getPlaybackTranscribeSegment()
         var iterations = 1
 
+//        val settingsSpeed = (audioNavigator.settings as ExoPlayerSettings).speed
+//
+//        Timber.d("Transcription for settingsSpeed: $settingsSpeed")
+
         while (iterations <= 100) {
+
+            if (iterations <= 5){
+//                val preferences = ExoPlayerPreferences(1.0,1.0)
+//
+//
+//                audioNavigator.submitPreferences(preferences as Configurable.Preferences<*>)
+
+            }
+
             if (transcriptionMap.containsKey(currentSegment)) {
                 // The map contains the key
                 val transcription = transcriptionMap[currentSegment]
@@ -1024,7 +1040,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     val timestamp = withContext(Dispatchers.Main) {
                         binding.timelinePosition.text.toString()
                     }
-                    val duration = 10
+                    val duration = 15
 
                     currentTranscribeSegment = transcriptionTimestamp
 //                    transcriptionRange = generateTranscriptionRanges(currentTranscribeSegment)
@@ -1451,7 +1467,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             language = Language(Locale.ENGLISH)
         )
 
-//        var i = 0
+        var i = 0
 
 //        val iterator = content?.iterator()
 //        locators.clear()
@@ -1484,12 +1500,17 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     break
                 }
             }
+
         }
 
         while (globalIterator.hasNext()) {
                 val element = globalIterator.next()
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
+
+            if ((i >= 15 || locators.count() >= 90) && full){
+                break
+            }
 
             for (range in tokenizedContent) {
                 addLocator(element.locator, string, range)
@@ -1510,7 +1531,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 }
             }
 
-
+            i++
 //            }
         }
 
@@ -1794,7 +1815,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         Timber.d("Transcription for locators.count():" + locators.count())
 
-        if (locators.count() < 15)
+        if (locators.count() <= 16)
             getCurrentVisibleContentRange(true)
 
         var locatorSlice = if (locatorMap.isEmpty()){
@@ -2098,6 +2119,33 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators + nextLocators).distinct()
                 }
 
+                if (currentHighlight != updatedMatchedLocators) {
+                    currentHighlight = updatedMatchedLocators
+
+
+                    val random = Random.Default
+
+                    (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
+                    navigator.applyDecorations(
+                        listOfNotNull(null),
+                        "tts"
+                    )
+
+                    val decorations: List<Decoration> = updatedMatchedLocators.map { locator ->
+                        Decoration(
+                            id = "tts",
+                            locator = locator,
+                            style = Decoration.Style.Highlight(
+                                tint = Color.rgb(124, 198, 247)
+                            )
+                        )
+                    }
+
+                    navigator.applyDecorations(
+                        decorations,
+                        "tts"
+                    )
+                }
                 // Concatenate locator.text.highlight into one string separated by spaces
 //                val concatenatedHighlights = updatedMatchedLocators.joinToString(" ") { it.text.highlight.toString() }
 //
@@ -2115,23 +2163,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //
 //                Timber.d("Transcription for highlightSum: " + highlightSum.toString())
 
-                val random = Random.Default
 
-                (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-                navigator.applyDecorations(
-                    listOfNotNull(null),
-                    "tts"
-                )
-
-                val decorations: List<Decoration> = updatedMatchedLocators.map { locator ->
-                    Decoration(
-                        id = "tts",
-                        locator = locator,
-                        style = Decoration.Style.Highlight(
-                            tint = Color.rgb(124, 198, 247)
-                        )
-                    )
-                }
 
 //                val decoration = Decoration(
 //                    id = "tts",
@@ -2147,10 +2179,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
 
-                navigator.applyDecorations(
-                    decorations,
-                    "tts"
-                )
+
 
 //                navigator.applyDecorations(listOfNotNull(decoration), "tts")
 
