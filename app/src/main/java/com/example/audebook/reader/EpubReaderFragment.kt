@@ -745,6 +745,63 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                 getNextTranscriptionSegment()
 
+//                val settings = (audioNavigator.settings.value as ExoPlayerSettings)
+//                val settingsSpeed = settings.speed
+                val settingsSpeed = (audioDialog.audioPreferencesModel.editor.value.preferences as ExoPlayerPreferences).speed
+//                Timber.d("Transcription for settingsSpeed: $settingsSpeed")
+
+                val roundedSpeed = if (settingsSpeed == null) { 1.0 } else {
+                    when {
+                        settingsSpeed <= 0.75 -> 0.5
+                        settingsSpeed <= 0.95 -> 0.8
+                        settingsSpeed <= 1.15 -> 1.0
+                        settingsSpeed <= 1.45 -> 1.2
+                        settingsSpeed <= 1.75 -> 1.5
+                        settingsSpeed <= 1.95 -> 1.8
+                        settingsSpeed <= 2.15 -> 2.0
+                        settingsSpeed <= 2.45 -> 2.2
+                        settingsSpeed <= 2.75 -> 2.5
+                        settingsSpeed <= 2.95 -> 2.8
+                        settingsSpeed <= 3.15 -> 3.0
+                        settingsSpeed <= 3.45 -> 3.2
+                        settingsSpeed <= 3.75 -> 3.5
+                        settingsSpeed <= 3.95 -> 3.8
+                        settingsSpeed <= 4.15 -> 4.0
+                        settingsSpeed <= 4.45 -> 4.2
+                        settingsSpeed <= 4.75 -> 4.5
+                        settingsSpeed <= 4.95 -> 4.8
+                        else -> 5.0
+                    }
+                }
+
+                // Map the settingsSpeed to the corresponding drawable resource
+                val speedDrawable = when (roundedSpeed) {
+                    0.5 -> R.drawable.ic_icon_playback_speed_0_5
+                    0.8 -> R.drawable.ic_icon_playback_speed_0_8
+                    1.0 -> R.drawable.ic_icon_playback_speed_1_0
+                    1.2 -> R.drawable.ic_icon_playback_speed_1_2
+                    1.5 -> R.drawable.ic_icon_playback_speed_1_5
+                    1.8 -> R.drawable.ic_icon_playback_speed_1_8
+                    2.0 -> R.drawable.ic_icon_playback_speed_2_0
+                    2.2 -> R.drawable.ic_icon_playback_speed_2_2
+                    2.5 -> R.drawable.ic_icon_playback_speed_2_5
+                    2.8 -> R.drawable.ic_icon_playback_speed_2_8
+                    3.0 -> R.drawable.ic_icon_playback_speed_3_0
+                    3.2 -> R.drawable.ic_icon_playback_speed_3_2
+                    3.5 -> R.drawable.ic_icon_playback_speed_3_5
+                    3.8 -> R.drawable.ic_icon_playback_speed_3_8
+                    4.0 -> R.drawable.ic_icon_playback_speed_4_0
+                    4.2 -> R.drawable.ic_icon_playback_speed_4_2
+                    4.5 -> R.drawable.ic_icon_playback_speed_4_5
+                    4.8 -> R.drawable.ic_icon_playback_speed_4_8
+                    5.0 -> R.drawable.ic_icon_playback_speed_5_0
+                    else -> R.drawable.ic_icon_playback_speed_1_0 // Default to 1.0x if no match
+                }
+
+                // Set the image of the setSpeed button
+                binding.setSpeed.setImageResource(speedDrawable)
+
+
 
 //                var currentSegment = getPlaybackTranscribeSegment()
 //                var iterations = 1

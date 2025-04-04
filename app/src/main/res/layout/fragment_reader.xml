@@ -188,7 +188,7 @@
                     android:alpha="0.7"
                     android:background="@android:color/transparent"
                     android:contentDescription="Transcribe"
-                    android:src="@drawable/media3_icon_playback_speed_1_0"
+                    android:src="@drawable/ic_icon_playback_speed_1_0"
                     android:tint="#BF4B4B4B" />
 
             </LinearLayout>
