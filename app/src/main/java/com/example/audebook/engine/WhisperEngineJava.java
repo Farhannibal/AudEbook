@@ -186,8 +186,17 @@ public class WhisperEngineJava implements WhisperEngine {
 
 //        Log.d(TAG, "Before inference...");
         // Run inference
-        mInterpreter.run(inputBuffer.getBuffer(), outputBuffer.getBuffer());
+        // mInterpreter.run(inputBuffer.getBuffer(), outputBuffer.getBuffer());
 //        Log.d(TAG, "After inference...");
+
+
+        try {
+            // Run inference
+            mInterpreter.run(inputBuffer.getBuffer(), outputBuffer.getBuffer());
+        } catch (Exception e) {
+            Log.e(TAG, "Error during inference: ", e);
+            return ""; // Return an empty string if an error occurs
+        }
 
         // Retrieve the results
         int outputLen = outputBuffer.getIntArray().length;

@@ -1042,7 +1042,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     }
                     val duration = 15
 
-                    currentTranscribeSegment = transcriptionTimestamp
+//                    currentTranscribeSegment = transcriptionTimestamp
 //                    transcriptionRange = generateTranscriptionRanges(currentTranscribeSegment)
 
                     val startTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
@@ -1508,7 +1508,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 
-            if ((i >= 15 || locators.count() >= 90) && full){
+            if ((i >= 15 || locators.count() >= 200) && full){
                 break
             }
 
@@ -1661,13 +1661,36 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         model.viewModelScope.launch {
             locators.clear()
-            transcriptionMap.clear()
+//            transcriptionMap.clear()
             locatorMap.clear()
             binding.loadingOverlay.visibility = View.VISIBLE
             globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
+
+            if (globalIterator.hasPrevious())
+                globalIterator.previous().locator
+
+            if (globalIterator.hasPrevious())
+                globalIterator.previous().locator
+
             getCurrentVisibleContentRange(true)
 
-            loadThenPlayStart(generateTranscriptionRanges(roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())))
+            val currentTime = roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
+
+            // Iterate over transcriptionMap and update locatorMap
+//            transcriptionMap.forEach { (transcriptionTimestamp, result) ->
+//                locatorMap[transcriptionTimestamp] = syncTranscriptionWithLocator(result, transcriptionTimestamp)
+//                Timber.d("Transcription For Reanchor: $transcriptionTimestamp")
+//            }
+
+            // Filter transcriptionMap to include only entries on or after currentTime
+            transcriptionMap.filterKeys { it >= currentTime }.forEach { (transcriptionTimestamp, result) ->
+                locatorMap[transcriptionTimestamp] = syncTranscriptionWithLocator(result, transcriptionTimestamp)
+                Timber.d("Transcription For Reanchor: $transcriptionTimestamp")
+            }
+
+
+
+            loadThenPlayStart(generateTranscriptionRanges(roundTimestampToNearest15Seconds(currentTime)))
         }
     }
 
@@ -1815,13 +1838,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         Timber.d("Transcription for locators.count():" + locators.count())
 
-        if (locators.count() <= 16)
+        if (locators.count() <= 51)
             getCurrentVisibleContentRange(true)
 
         var locatorSlice = if (locatorMap.isEmpty()){
             locators
         } else {
-            locators.slice(0..15)
+            locators.slice(0..50)
         }
 
 //        val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
@@ -2031,7 +2054,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         var currentTime = System.currentTimeMillis()
         Timber.d("Transcription for loadThenPlayStart")
         for (timestamp in timestamps) {
-            while (!locatorMap.containsKey(timestamp)) {
+            while (!transcriptionMap.containsKey(timestamp)) {
                 if (System.currentTimeMillis() - currentTime >= 100) {
                     currentTime = System.currentTimeMillis()
                     transcribeAudio(timestamp)
@@ -2044,6 +2067,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             Timber.d("Transcription for timestamp: " + timestamp)
         }
         audioNavigator.play()
+        updateControlsLayoutBackground(true)
         binding.loadingOverlay.visibility = View.GONE
     }
 
