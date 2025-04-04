@@ -6,12 +6,13 @@ AudEBook is an Android application designed to enhance your reading experience b
 - **Transcription**: Converts audiobooks into text format.
 - **Syncing**: Automatically syncs the transcribed text with the corresponding eBook.
 - **User-Friendly Interface**: Simple and intuitive design for easy navigation.
-- **Multi-Language Support**: Works with audiobooks and eBooks in multiple languages.
+<!-- - **Multi-Language Support**: Works with audiobooks and eBooks in multiple languages. -->
 
 ---
 
 ## How to Download
 
+TODO:
 1. Visit the [Google Play Store](https://play.google.com) on your Android device.
 2. Search for **AudEBook**.
 3. Tap the **Install** button to download and install the app.
@@ -22,18 +23,18 @@ AudEBook is an Android application designed to enhance your reading experience b
 ## How to Use
 
 1. **Import Audiobook and eBook**:
-	- Open the app and tap on the **Import** button.
-	- Select the audiobook and its corresponding eBook from your device storage.
+	- Open the app and tap on the **Import** (+) button.
+	- Select the eBook and then when you open it, select the corresponding audiobook from your device storage.
 
-2. **Start Transcription**:
-	- Tap on the **Transcribe** button to convert the audiobook into text.
-	- The app will process the audio and generate a synchronized text file.
-
-3. **Sync with eBook**:
+2. **Start Transcription and Sync with EPUB**:
+	- Start The Audiobook at your desired Position
+	- Go to the position of the EPUB that corresponds to the Audiobook
+	- Tap on the **Anchor** button to start transcribing the audiobook.
+	- The app will process the audio and move the EPUB with the corresponding text in the book.
 	- Once transcription is complete, the app will automatically sync the text with the eBook.
 	- You can now switch between listening and reading seamlessly.
 
-4. **Read and Listen**:
+5. **Read and Listen**:
 	- Use the built-in reader to read the eBook while listening to the audiobook.
 	- The app will highlight the text as the audio plays for a synchronized experience.
 
