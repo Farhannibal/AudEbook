@@ -194,6 +194,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     var currentHighlight:  List<Locator> = listOf<Locator>()
 
+    var currentNumberOfSegmentsListenedTo: Int = 0
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -1723,11 +1725,18 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             binding.loadingOverlay.visibility = View.VISIBLE
             globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
 
-            if (globalIterator.hasPrevious())
-                globalIterator.previous().locator
+            try {
 
-            if (globalIterator.hasPrevious())
-                globalIterator.previous().locator
+
+                if (globalIterator.hasPrevious())
+                    globalIterator.previous().locator
+
+                if (globalIterator.hasPrevious())
+                    globalIterator.previous().locator
+
+            } catch (e: Exception)  {
+
+            }
 
             getCurrentVisibleContentRange(true)
 
@@ -1920,7 +1929,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
 
-        val indexRange = findLongestRun(matchedIndexs,5)
+        val indexRange = findLongestRun(matchedIndexs,3)
         if(indexRange.isNotEmpty()) {
             matchedLocators =
                 locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
@@ -2202,6 +2211,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                 if (currentHighlight != updatedMatchedLocators) {
                     currentHighlight = updatedMatchedLocators
+                    currentNumberOfSegmentsListenedTo++
 
 
                     val random = Random.Default
@@ -2226,6 +2236,49 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         decorations,
                         "tts"
                     )
+
+                    if (currentNumberOfSegmentsListenedTo >= 8) {
+                        currentNumberOfSegmentsListenedTo = 0
+//                        audioNavigator.pause()
+
+                        model.viewModelScope.launch {
+                            val currentTime =
+                                roundTimestampToNearest15Seconds(playbackTranscribeSegment)
+                            locators.clear()
+//            transcriptionMap.clear()
+                            // Clear only entries after currentTime
+                            locatorMap.entries.removeIf { it.key > currentTime }
+//                            binding.loadingOverlay.visibility = View.VISIBLE
+                            globalIterator =
+                                publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!
+                                    .iterator()
+
+
+
+//                        if (globalIterator.hasPrevious())
+//                            globalIterator.previous().locator
+//
+//                        if (globalIterator.hasPrevious())
+//                            globalIterator.previous().locator
+
+                            getCurrentVisibleContentRange(true)
+
+
+
+                            transcriptionMap.filterKeys { it > currentTime }
+                                .forEach { (transcriptionTimestamp, result) ->
+                                    locatorMap[transcriptionTimestamp] =
+                                        syncTranscriptionWithLocator(result, transcriptionTimestamp)
+                                }
+
+//                            loadThenPlayStart(
+//                                generateTranscriptionRanges(
+//                                    roundTimestampToNearest15Seconds(currentTime)
+//                                )
+//                            )
+                        }
+
+                    }
                 }
                 // Concatenate locator.text.highlight into one string separated by spaces
 //                val concatenatedHighlights = updatedMatchedLocators.joinToString(" ") { it.text.highlight.toString() }
