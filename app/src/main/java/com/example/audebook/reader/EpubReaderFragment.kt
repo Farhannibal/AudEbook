@@ -264,7 +264,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                     lifecycleScope.launch(Dispatchers.Main) {
 //                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
                                         transcriptionMap[cachedCurrentTranscribeSegment] = result
-                                        locatorMap[cachedCurrentTranscribeSegment] = syncTranscriptionWithLocator(result,cachedCurrentTranscribeSegment)
+                                        if(locatorMap.count() <= 10) {
+                                            locatorMap[cachedCurrentTranscribeSegment] =
+                                                syncTranscriptionWithLocator(
+                                                    result,
+                                                    cachedCurrentTranscribeSegment
+                                                )
+                                        }
 
 //                                        if (isLoadingInitTranscription && (transcriptionMap.count() <=2)){
 //                                            transcribeAudio(getNext15SecondInterval(currentTranscribeSegment, 1))
@@ -732,6 +738,16 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                            ,getNext15SecondInterval(playbackTranscribeSegment, 1)
 //                            ,getNext15SecondInterval(playbackTranscribeSegment, 2)))
 //                }
+                if (transcriptionMap.containsKey(playbackTranscribeSegment)){
+                    model.viewModelScope.launch {
+                        locatorMap[playbackTranscribeSegment]  =
+                            syncTranscriptionWithLocator(
+                                transcriptionMap[playbackTranscribeSegment].toString(),
+                                playbackTranscribeSegment
+                            )
+                    }
+                }
+
             }
         }
 
@@ -1567,7 +1583,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 
-            if ((i >= 15 || locators.count() >= 200) && full){
+            if ((i >= 15 || locators.count() >= 90) && full){
                 break
             }
 
@@ -1904,13 +1920,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         Timber.d("Transcription for locators.count():" + locators.count())
 
-        if (locators.count() <= 51)
+        if (locators.count() <= 31)
             getCurrentVisibleContentRange(true)
 
         var locatorSlice = if (locatorMap.isEmpty()){
             locators
         } else {
-            locators.slice(0..50)
+            locators.slice(0..30)
         }
 
 //        val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
