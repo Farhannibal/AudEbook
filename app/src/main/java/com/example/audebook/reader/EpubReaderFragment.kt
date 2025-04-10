@@ -196,6 +196,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     var currentNumberOfSegmentsListenedTo: Int = 0
 
+    var lastColour: Int = Color.rgb(124, 198, 247)
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -1095,7 +1097,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     currentTranscribeSegment = transcriptionTimestamp
 
 //                Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
-                if (sdcardDataFolder != null && currentTranscribeSegment == transcriptionTimestamp) {
+                if (sdcardDataFolder != null && !transcriptionMap.containsKey(transcriptionTimestamp) && currentTranscribeSegment == transcriptionTimestamp) {
 //                    Timber.d(audioNavigator.readingOrder.items[0].toString())
 //                    startTimeGetContent = System.currentTimeMillis()
 //
@@ -1945,16 +1947,16 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
 
-        val indexRange = findLongestRun(matchedIndexs,3)
+        val indexRange = findLongestRun(matchedIndexs,1)
         if(indexRange.isNotEmpty()) {
             matchedLocators =
                 locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
 
             // Remove locators from matchedLocators that are in locatorMap[prevSegment]
-            val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
-            matchedLocators = matchedLocators.filter { it !in prevLocators }.toMutableList()
-
-            matchedLocators = matchedLocators.distinct().toMutableList()
+//            val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
+//            matchedLocators = matchedLocators.filter { it !in prevLocators }.toMutableList()
+//
+//            matchedLocators = matchedLocators.distinct().toMutableList()
 
             if (locatorMap.containsKey(prevSegment)) {
                 locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
@@ -2222,7 +2224,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 var updatedMatchedLocators = matchedLocators
 
                 if (prevLocators != null && prevLocators.size >= 2){
-                    updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators + nextLocators).distinct()
+//                    updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators + nextLocators).distinct()
+                    updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators).distinct()
                 }
 
                 if (currentHighlight != updatedMatchedLocators) {
@@ -2243,17 +2246,33 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                             id = "tts",
                             locator = locator,
                             style = Decoration.Style.Highlight(
-                                tint = Color.rgb(124, 198, 247)
+                                tint = lastColour
+                            )
+                        )
+                    }
+
+                    lastColour = if (lastColour == Color.rgb(124, 198, 247)){
+                        Color.rgb(124, 228, 227)
+                    } else {
+                        Color.rgb(124, 198, 247)
+                    }
+
+                    val decorations2: List<Decoration> = nextLocators.distinct().map { locator ->
+                        Decoration(
+                            id = "tts",
+                            locator = locator,
+                            style = Decoration.Style.Highlight(
+                                tint = lastColour
                             )
                         )
                     }
 
                     navigator.applyDecorations(
-                        decorations,
+                        decorations + decorations2,
                         "tts"
                     )
 
-                    if (currentNumberOfSegmentsListenedTo >= 8) {
+                    if (currentNumberOfSegmentsListenedTo >= 6) {
                         currentNumberOfSegmentsListenedTo = 0
 //                        audioNavigator.pause()
 
