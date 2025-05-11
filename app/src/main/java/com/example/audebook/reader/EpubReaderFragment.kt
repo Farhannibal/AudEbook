@@ -1237,7 +1237,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             FFmpegKit.execute(command)
 
             if (!outputFilePath.endsWith(".wav")){
-                val convertCommand = "-y -i $outputFilePath $outputFilePath.wav"
+//                val convertCommand = "-y -i $outputFilePath  $outputFilePath.wav"
+                val convertCommand = "-y -i $outputFilePath  -ar 16000 -ac 1 -c:a pcm_s16le $outputFilePath.wav"
                 FFmpegKit.execute(convertCommand)
             }
 //        }
