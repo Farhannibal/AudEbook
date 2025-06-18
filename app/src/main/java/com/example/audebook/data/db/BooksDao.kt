@@ -16,6 +16,7 @@ import com.example.audebook.data.model.Book
 import com.example.audebook.data.model.AudioBook
 import com.example.audebook.data.model.Bookmark
 import com.example.audebook.data.model.Highlight
+import com.example.audebook.data.model.AudioBookTranscript
 
 @Dao
 interface BooksDao {

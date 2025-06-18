@@ -198,6 +198,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     var lastColour: Int = Color.rgb(124, 198, 247)
 
+    lateinit var  latestLocatorPosition: Locator
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -1948,10 +1950,38 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
 
+//        val indexRange = findLongestRun(matchedIndexs,1)
+//        if(indexRange.isNotEmpty()) {
+//            matchedLocators =
+//                locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
+//
+//            // Remove locators from matchedLocators that are in locatorMap[prevSegment]
+////            val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
+////            matchedLocators = matchedLocators.filter { it !in prevLocators }.toMutableList()
+////
+////            matchedLocators = matchedLocators.distinct().toMutableList()
+//
+//            if (locatorMap.containsKey(prevSegment)) {
+//                locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
+//                    addAll(locators.subList(0, indexRange.first()))
+//                }
+//            }
+//
+////            locators.subList(0, indexRange.first()).clear()
+//            locators.subList(0, indexRange.last()).clear()
+//
+//        } else {
+//            matchedLocators.clear()
+//        }
+
         val indexRange = findLongestRun(matchedIndexs,1)
         if(indexRange.isNotEmpty()) {
-            matchedLocators =
+            matchedLocators = if (locatorMap.isEmpty()){
                 locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
+            } else {
+                locators.slice(0..indexRange.last()) as MutableList<Locator>
+            }
+
 
             // Remove locators from matchedLocators that are in locatorMap[prevSegment]
 //            val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
@@ -1959,17 +1989,23 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //
 //            matchedLocators = matchedLocators.distinct().toMutableList()
 
-            if (locatorMap.containsKey(prevSegment)) {
-                locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
-                    addAll(locators.subList(0, indexRange.first()))
-                }
-            }
+//            if (locatorMap.containsKey(prevSegment)) {
+//                locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
+//                    addAll(locators.subList(0, indexRange.first()))
+//                }
+//            }
 
-            locators.subList(0, indexRange.first()).clear()
+//            locators.subList(0, indexRange.first()).clear()
+            locators.subList(0, indexRange.last()).clear()
 
         } else {
             matchedLocators.clear()
         }
+
+
+
+
+
 //        Timber.d("Transcription for: "+transcription)
 ////        Timber.d("Transcription for: "+matchedDebugTest.toString())
 ////        Timber.d("Transcription for: "+matchedIndexs.toString())
@@ -2189,6 +2225,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             if (!it) {
 
                 var pageLocator = matchedLocators[0]
+                latestLocatorPosition = pageLocator
 
                 if (settingsScroll && pageLocators != null)
 //                    if(((pageLocators[0].locations.progression ?: 0.0) - (pageLocator.locations.progression ?: 0.0)) < 0.001)
@@ -2286,7 +2323,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                             locatorMap.entries.removeIf { it.key > currentTime }
 //                            binding.loadingOverlay.visibility = View.VISIBLE
                             globalIterator =
-                                publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!
+                                publication.content(pageLocator)!!
                                     .iterator()
 
 
