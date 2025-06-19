@@ -16,13 +16,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.audebook.data.model.*
 import com.example.audebook.data.model.Book
 import com.example.audebook.data.model.AudioBook
+import com.example.audebook.data.model.AudioBookTranscript
 import com.example.audebook.data.model.Bookmark
 import com.example.audebook.data.model.Catalog
 import com.example.audebook.data.model.Highlight
 
 @Database(
-    entities = [Book::class,AudioBook::class, Bookmark::class, Highlight::class, Catalog::class],
-    version = 3,
+    entities = [Book::class,AudioBook::class, AudioBookTranscript::class, Bookmark::class, Highlight::class, Catalog::class],
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(
@@ -38,7 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        val MIGRATION_1_2 = object : Migration(1, 3) {
+        val MIGRATION_1_2 = object : Migration(1, 4) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Perform necessary migration steps here
                 // For example, adding a new table:

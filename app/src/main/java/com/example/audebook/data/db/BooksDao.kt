@@ -38,6 +38,14 @@ interface BooksDao {
     suspend fun insertAudioBook(book: AudioBook): Long
 
     /**
+     * Inserts a audiobookTranscript
+     * @param book The book to insert
+     * @return ID of the book that was added (primary key)
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAudioBookTranscript(book: AudioBookTranscript): Long
+
+    /**
      * Deletes a book
      * @param bookId The ID of the book
      */
@@ -55,6 +63,13 @@ interface BooksDao {
      */
     @Query("SELECT * FROM " + AudioBook.TABLE_NAME + " WHERE " + AudioBook.ID + " = :id")
     suspend fun getAudiobook(id: Long): AudioBook?
+
+    /**
+     * Retrieve all audiobook transcript
+     * @return List of books as Flow
+     */
+    @Query("SELECT * FROM " + AudioBookTranscript.TABLE_NAME + " WHERE " + AudioBookTranscript.BOOKID + " = :bookid")
+    fun getAllAudiobooksTranscripts(bookid: Long): Flow<List<AudioBookTranscript>>
 
     /**
      * Retrieve all books
@@ -155,4 +170,9 @@ interface BooksDao {
         "UPDATE " + AudioBook.TABLE_NAME + " SET " + AudioBook.PROGRESSION + " = :locator WHERE " + AudioBook.ID + "= :id"
     )
     suspend fun saveAudiobookProgression(locator: String, id: Long)
+
+    @Query(
+        "UPDATE " + AudioBookTranscript.TABLE_NAME + " SET " + AudioBookTranscript.TRANSCRIPT + " = :locator WHERE " + AudioBookTranscript.ID + "= :id"
+    )
+    suspend fun saveAudiobookTranscript(locator: String, id: Long)
 }

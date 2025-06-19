@@ -17,8 +17,12 @@ data class AudioBookTranscript(
     @PrimaryKey
     @ColumnInfo(name = ID)
     var id: Long? = null,
-    @ColumnInfo(name = TRANSCRIPTS)
-    val transcripts: String?
+    @ColumnInfo(name = BOOKID)
+    var bookid: Long?,
+    @ColumnInfo(name = TRANSCRIPT)
+    val transcript: String?,
+    @ColumnInfo(name = TIMESTAMP)
+    val timestamp: String?
 ) {
 
 //    constructor(
@@ -34,6 +38,8 @@ data class AudioBookTranscript(
 
         const val TABLE_NAME = "audiobooktranscript"
         const val ID = "id"
-        const val TRANSCRIPTS = "transcripts"
+        const val BOOKID = "bookid"
+        const val TIMESTAMP = "timestamp"
+        const val TRANSCRIPT = "transcript"
     }
 }
