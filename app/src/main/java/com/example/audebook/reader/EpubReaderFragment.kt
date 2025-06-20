@@ -2027,8 +2027,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        }
 
         val indexRange = findLongestRun(matchedIndexs,1)
+        val hasLaterEntries = locatorMap.keys.any { it > roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString()) }
         if(indexRange.isNotEmpty()) {
-            matchedLocators = if (locatorMap.isEmpty()){
+            matchedLocators = if (!hasLaterEntries){
                 locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
             } else {
                 locators.slice(0..indexRange.last()) as MutableList<Locator>
@@ -2277,7 +2278,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             if (!it) {
 
                 var pageLocator = matchedLocators[0]
-                latestLocatorPosition = pageLocator
+
 
                 if (settingsScroll && pageLocators != null)
 //                    if(((pageLocators[0].locations.progression ?: 0.0) - (pageLocator.locations.progression ?: 0.0)) < 0.001)
@@ -2317,6 +2318,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators + nextLocators).distinct()
                     updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators).distinct()
                 }
+
+                if (!updatedMatchedLocators.isEmpty())
+                    latestLocatorPosition = updatedMatchedLocators[0]
 
                 if (currentHighlight != updatedMatchedLocators) {
                     currentHighlight = updatedMatchedLocators
@@ -2373,6 +2377,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            transcriptionMap.clear()
                             // Clear only entries after currentTime
                             locatorMap.entries.removeIf { it.key > currentTime }
+
 //                            binding.loadingOverlay.visibility = View.VISIBLE
                             globalIterator =
                                 publication.content(pageLocator)!!
