@@ -121,6 +121,7 @@ import kotlin.time.Duration.Companion.seconds
 
 import org.readium.r2.shared.publication.services.content.Content
 import org.readium.r2.shared.publication.services.locate
+import kotlin.Exception
 
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -275,6 +276,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                                     cachedCurrentTranscribeSegment
                                                 )
                                         }
+                                        application.bookRepository.insertAudioBookTranscript(epubBookId,result,cachedCurrentTranscribeSegment)
 
 //                                        if (isLoadingInitTranscription && (transcriptionMap.count() <=2)){
 //                                            transcribeAudio(getNext15SecondInterval(currentTranscribeSegment, 1))
@@ -319,13 +321,52 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         lifecycleScope.launch {
             try {
-                loadAudiobookNavigator(epubBookId)
+                if (::audioNavigator.isInitialized) {
+                    // yourLateinitVar is initialized
+                } else {
+                    // yourLateinitVar is NOT initialized
+                    loadAudiobookNavigator(epubBookId)
+                }
+
             } catch (e: Exception) {
                 Timber.d("")
                 Timber.e(e, "Failed to load audiobook navigator")
                 // Handle the exception, e.g., show an error message to the user
             }
         }
+
+        lifecycleScope.launch {
+            try {
+                if(transcriptionMap.isEmpty()) {
+
+                    val transcriptFlow = application.bookRepository.getAllAudiobooksTranscripts(epubBookId)
+
+                    var transcriptTimestamp = "00:00:00"
+
+                    transcriptFlow.collect { transcriptList ->
+                        transcriptList.forEach { transcript ->
+                            // Do something with each AudioBookTranscript
+//                    Timber.d("Transcription for transcript load" + transcript)
+                            try {
+                                transcriptTimestamp = transcript.timestamp.toString()
+                                transcriptionMap[transcriptTimestamp] =
+                                    transcript.transcript.toString()
+
+                            } catch (e: Exception) {
+                                Timber.d("Transcription for transcript load" + transcript)
+                            }
+                        }
+                    }
+                }
+
+            } catch (e: Exception) {
+                Timber.d("")
+                Timber.e(e, "Failed to load cached transcript")
+                // Handle the exception, e.g., show an error message to the user
+            }
+        }
+
+
 
 
 
@@ -387,6 +428,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 }
             }
         )
+
 
 
 
@@ -1153,6 +1195,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    Timber.d("Transcription for: --------------------------------------------------")
                 } else {
                     Timber.d("Transcription for currentTranscribeSegment: Still Adding currentTranscribeSegment" )
+                    currentTranscribeSegment = transcriptionTimestamp
                 }
             } else {
                 Timber.d("Whisper is already in progress...!")
@@ -1400,12 +1443,16 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         binding.loadAudioBook.visibility = View.GONE
 
+        // LOAD TRANSCRIPT
+
+
         inputFilePath = withContext(Dispatchers.IO) {
             getFilePathFromContentUri(
                 requireContext(),
                 Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
             )
         }.toString()
+
 
 
     }
@@ -1584,7 +1631,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         while (globalIterator.hasNext()) {
+            try {
                 val element = globalIterator.next()
+
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 
@@ -1611,6 +1660,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 }
             }
 
+            } catch (e: Exception) {
+                Timber.d("Transcription for catching has next: " + i)
+            }
             i++
 //            }
         }

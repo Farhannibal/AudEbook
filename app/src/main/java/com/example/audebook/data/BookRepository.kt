@@ -33,6 +33,8 @@ class BookRepository(
 
     suspend fun getAudiobook(id: Long) = booksDao.getAudiobook(id)
 
+    suspend fun getAllAudiobooksTranscripts(bookid: Long) = booksDao.getAllAudiobooksTranscripts(bookid)
+
     fun audiobooks(): Flow<List<AudioBook>> = booksDao.getAllAudiobooks()
 
     suspend fun saveProgression(locator: Locator, bookId: Long) =
