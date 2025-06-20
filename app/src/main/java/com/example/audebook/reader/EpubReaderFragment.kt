@@ -201,6 +201,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     lateinit var  latestLocatorPosition: Locator
 
+    var segmentLength: Int = 10
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
@@ -1161,7 +1163,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     val timestamp = withContext(Dispatchers.Main) {
                         binding.timelinePosition.text.toString()
                     }
-                    val duration = 15
+                    val duration = segmentLength
 
 //                    currentTranscribeSegment = transcriptionTimestamp
 //                    transcriptionRange = generateTranscriptionRanges(currentTranscribeSegment)
@@ -1327,7 +1329,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         val totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
-        val roundedSeconds = (totalSeconds / 15) * 15
+        val roundedSeconds = (totalSeconds / segmentLength) * segmentLength
 
         val hours = roundedSeconds / 3600
         val minutes = (roundedSeconds % 3600) / 60
@@ -1341,7 +1343,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val ranges = mutableListOf<String>()
 
 //        for (i in -15..45 step 15) {
-        for (i in 0..45 step 15) {
+        for (i in 0..3*segmentLength step segmentLength) {
             val newTimeInSeconds = baseTimeInSeconds + i
             val hours = newTimeInSeconds / 3600
             val minutes = (newTimeInSeconds % 3600) / 60
@@ -1356,7 +1358,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private fun getNext15SecondInterval(currentTranscribeSegment: String, intervals: Int): String {
         val baseTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
-        val newTimeInSeconds = baseTimeInSeconds + (intervals *15)
+        val newTimeInSeconds = baseTimeInSeconds + (intervals * segmentLength)
         val hours = newTimeInSeconds / 3600
         val minutes = (newTimeInSeconds % 3600) / 60
         val seconds = newTimeInSeconds % 60
@@ -1637,7 +1639,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 
-            if ((i >= 15 || locators.count() >= 90) && full){
+            if ((i >= 15 || locators.count() >= 60) && full){
                 break
             }
 
