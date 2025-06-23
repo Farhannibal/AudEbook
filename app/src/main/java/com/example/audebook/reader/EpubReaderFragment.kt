@@ -22,6 +22,7 @@ import android.text.format.DateUtils
 import android.view.*
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.webkit.WebView
 import android.widget.ImageView
 import android.widget.SeekBar
 import androidx.activity.result.ActivityResultLauncher
@@ -123,6 +124,10 @@ import org.readium.r2.shared.publication.services.content.Content
 import org.readium.r2.shared.publication.services.locate
 import kotlin.Exception
 
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
+
 
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListener {
@@ -202,6 +207,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     lateinit var  latestLocatorPosition: Locator
 
     var segmentLength: Int = 10
+
+    lateinit var CachedWebView: List<WebView>
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -434,6 +441,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
 
+
         super.onCreate(savedInstanceState)
     }
 
@@ -478,6 +486,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         binding.loadAudioBook.setOnClickListener(this::onLoadAudioBook )
         binding.setSpeed.setOnClickListener(this::onSetSpeed )
         updateControlsLayoutBackground(false)
+
+        CachedWebView = findAllWebViews(requireView())
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -544,6 +554,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             },
             viewLifecycleOwner
         )
+
+        CachedWebView = findAllWebViews(requireView())
     }
 
     private suspend fun testFunc() {
@@ -892,6 +904,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
             }
+        }
+
+        if (latestPlaybackStatus.playWhenReady) {
+            startAutoScrollWebViews()
+        } else {
+            stopAutoScrollWebViews()
         }
 
 //        model.viewModelScope.launch {
@@ -1605,29 +1623,32 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 //        while (iterator!!.hasNext() && i <= 15) {
         while (globalIterator.hasNext()) {
-            val element = globalIterator.next()
+            try {
+                val element = globalIterator.next()
 //            Timber.d("Transcription for unmerged: " + tokenizedContent.toString())
 //            Timber.d("Transcription for merged: " + mergeRanges(tokenizedContent).toString())
 
 
-
-            Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
-            Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
+                Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
+                Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
 
 //            if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
-            val progression = element.locator.locations.totalProgression
+                val progression = element.locator.locations.totalProgression
 
-            if (progression != null && currentAudioProgression != null) {
-                Timber.d("Transcription for: " + progression)
-                // Calculate the difference between locator progression and currentAudioProgression
-                val difference = progression - currentAudioProgression
+                if (progression != null && currentAudioProgression != null) {
+                    Timber.d("Transcription for: " + progression)
+                    // Calculate the difference between locator progression and currentAudioProgression
+                    val difference = progression - currentAudioProgression
 
-                // Check if the difference is within 5% of currentAudioProgression
-                if (difference in progressionRange) {
-                    // Execute the logic when the locator is within 5%
-                    // Break out of the loop
-                    break
+                    // Check if the difference is within 5% of currentAudioProgression
+                    if (difference in progressionRange) {
+                        // Execute the logic when the locator is within 5%
+                        // Break out of the loop
+                        break
+                    }
                 }
+            }  catch (e: Exception) {
+                Timber.d("Transcription for catching has next: " + i)
             }
 
         }
@@ -1832,6 +1853,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 
             loadThenPlayStart(generateTranscriptionRanges(roundTimestampToNearest15Seconds(currentTime)))
+
+            CachedWebView = findAllWebViews(requireView())
         }
     }
 
@@ -1985,7 +2008,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         var locatorSlice = if (locatorMap.isEmpty()){
             locators
         } else {
-            locators.slice(0..30)
+
+            val endIndex = if (locators.count() < 30) locators.count() - 1 else 30
+            if (endIndex >= 0) locators.slice(0..endIndex) else emptyList()
         }
 
 //        val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
@@ -2310,7 +2335,28 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    matchedLocators[0]
 //                }
 
-                navigator.go(pageLocator, true)
+                var locatorProg = pageLocator.locations.progression
+                var navigatorProg = navigator.currentLocator.value.locations.progression
+                if (locatorProg != null && navigatorProg != null) {
+                    Timber.d("Transcription for locatorProg < navigatorProg: $locatorProg < $navigatorProg")
+                    if (kotlin.math.abs(navigatorProg - locatorProg) > 0.15) {
+
+                        navigator.go(pageLocator, true)
+                        CachedWebView = findAllWebViews(requireView())
+                    }
+                }
+
+
+//                val rootView = requireView()
+//                val webViews = findAllWebViews(rootView)
+                // CALCULATE SPEED FROM PROGRESSIONNNNNNNN
+//                CachedWebView.forEach {
+////                    Timber.d("Found WebView: $it")
+//                    it.scrollBy(0,20)
+////                    it.scrollY += 20
+////                    it.flingScroll(0,50)
+//                }
+
 //                navigator.go(locatorToGoTo, true)
 //                navigator.goBackward(true)
 
@@ -2454,8 +2500,43 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
+
 //        if (locators.count() < 100)
 //            getCurrentVisibleContentRange()
+    }
+
+    private fun findAllWebViews(view: View, found: MutableList<android.webkit.WebView> = mutableListOf()): List<android.webkit.WebView> {
+        if (view is android.webkit.WebView) {
+            found.add(view)
+        } else if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findAllWebViews(view.getChildAt(i), found)
+            }
+        }
+        return found
+    }
+
+    // Add this property to your class to keep track of the scrolling job
+    private var webViewScrollJob: Job? = null
+
+    // Call this function to start auto-scrolling
+    private fun startAutoScrollWebViews() {
+        // Cancel any existing job
+        webViewScrollJob?.cancel()
+        webViewScrollJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (latestPlaybackStatus.playWhenReady && isActive) {
+                CachedWebView.forEach {
+                    it.scrollBy(0, 4)
+                }
+                delay(100) // 0.1 seconds
+            }
+        }
+    }
+
+    // Call this function to stop auto-scrolling
+    private fun stopAutoScrollWebViews() {
+        webViewScrollJob?.cancel()
+        webViewScrollJob = null
     }
 
 }
