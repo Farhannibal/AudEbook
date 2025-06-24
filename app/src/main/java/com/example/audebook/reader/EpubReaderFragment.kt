@@ -1668,8 +1668,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 break
             }
 
+                var j = 0
+
             for (range in tokenizedContent) {
-                addLocator(element.locator, string, range)
+                if (j <= 200)
+                    addLocator(element.locator, string, range)
+                j++
             }
 
             val progression = element.locator.locations.totalProgression
