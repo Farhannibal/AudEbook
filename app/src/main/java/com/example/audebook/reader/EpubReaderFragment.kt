@@ -1951,7 +1951,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            )
 
         if (locators.isEmpty())
-            getCurrentVisibleContentRange()
+            getCurrentVisibleContentRange(true)
         var matchedLocators = mutableListOf<Locator>()
         val matchedDebugTest = mutableListOf<String>()
         val matchedIndexs = mutableListOf<Int>()
@@ -2443,7 +2443,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 //                            binding.loadingOverlay.visibility = View.VISIBLE
                             globalIterator =
-                                publication.content(pageLocator)!!
+                                publication.content(latestLocatorPosition)!!
                                     .iterator()
 
 
