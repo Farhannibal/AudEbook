@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.audebook.Application
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferencesEditor
 import org.readium.adapter.pdfium.navigator.PdfiumPreferencesEditor
 import org.readium.navigator.media.tts.android.AndroidTtsEngine
@@ -33,6 +34,7 @@ import com.example.audebook.reader.ReaderViewModel
 import com.example.audebook.reader.tts.TtsPreferencesEditor
 import com.example.audebook.shared.views.*
 import com.example.audebook.utils.compose.DropdownMenuButton
+
 
 /**
  * Stateful user settings component paired with a [ReaderViewModel].
@@ -146,8 +148,8 @@ private fun <P : Configurable.Preferences<P>, E : PreferencesEditor<P>> UserPref
             is ExoPlayerPreferencesEditor ->
                 MediaUserPreferences(
                     commit = commit,
-                    speed = editor.speed,
-                    pitch = editor.pitch
+                    speed = editor.speed
+//                    pitch = editor.pitch
                 )
         }
     }
@@ -159,6 +161,7 @@ private fun MediaUserPreferences(
     language: Preference<Language?>? = null,
     voice: EnumPreference<AndroidTtsEngine.Voice.Id?>? = null,
     speed: RangePreference<Double>? = null,
+    scrollspeed: RangePreference<Double>? = null,
     pitch: RangePreference<Double>? = null
 ) {
     Column {
@@ -166,6 +169,14 @@ private fun MediaUserPreferences(
             StepperItem(
                 title = stringResource(R.string.speed_rate),
                 preference = speed,
+                commit = commit
+            )
+        }
+
+        if (scrollspeed != null) {
+            StepperItem(
+                title = "Scroll Speed",
+                preference = scrollspeed,
                 commit = commit
             )
         }
