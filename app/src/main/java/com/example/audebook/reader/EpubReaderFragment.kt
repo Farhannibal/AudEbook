@@ -798,15 +798,17 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                            ,getNext15SecondInterval(playbackTranscribeSegment, 1)
 //                            ,getNext15SecondInterval(playbackTranscribeSegment, 2)))
 //                }
-                if (transcriptionMap.containsKey(playbackTranscribeSegment)){
-                    model.viewModelScope.launch {
-                        locatorMap[playbackTranscribeSegment]  =
-                            syncTranscriptionWithLocator(
-                                transcriptionMap[playbackTranscribeSegment].toString(),
-                                playbackTranscribeSegment
-                            )
-                    }
-                }
+//                if (latestPlaybackStatus.playWhenReady) {
+//                    if (transcriptionMap.containsKey(playbackTranscribeSegment)) {
+//                        model.viewModelScope.launch {
+//                            locatorMap[playbackTranscribeSegment] =
+//                                syncTranscriptionWithLocator(
+//                                    transcriptionMap[playbackTranscribeSegment].toString(),
+//                                    playbackTranscribeSegment
+//                                )
+//                        }
+//                    }
+//                }
 
             }
         }
@@ -906,11 +908,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
+        if(navigator.settings.value.scroll){
         if (latestPlaybackStatus.playWhenReady) {
             startAutoScrollWebViews()
         } else {
             stopAutoScrollWebViews()
         }
+            }
 
 //        model.viewModelScope.launch {
 //            val currentAudioPosition = audioNavigator.currentLocator.value
@@ -998,7 +1002,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         updateControlsLayoutBackground(false)
                     } else {
                         if (transcriptionMap.isEmpty()){
-                            loadThenPlayStart(generateTranscriptionRanges(roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())))
+//                            loadThenPlayStart(generateTranscriptionRanges(roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())))
                         }
                         audioNavigator.play()
                         updateControlsLayoutBackground(true)
@@ -1621,37 +1625,37 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        var combinedRange: IntRange? = null
 
 
-//        while (iterator!!.hasNext() && i <= 15) {
-        while (globalIterator.hasNext()) {
-            try {
-                val element = globalIterator.next()
-//            Timber.d("Transcription for unmerged: " + tokenizedContent.toString())
-//            Timber.d("Transcription for merged: " + mergeRanges(tokenizedContent).toString())
-
-
-                Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
-                Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
-
-//            if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
-                val progression = element.locator.locations.totalProgression
-
-                if (progression != null && currentAudioProgression != null) {
-                    Timber.d("Transcription for: " + progression)
-                    // Calculate the difference between locator progression and currentAudioProgression
-                    val difference = progression - currentAudioProgression
-
-                    // Check if the difference is within 5% of currentAudioProgression
-                    if (difference in progressionRange) {
-                        // Execute the logic when the locator is within 5%
-                        // Break out of the loop
-                        break
-                    }
-                }
-            }  catch (e: Exception) {
-                Timber.d("Transcription for catching has next: " + i)
-            }
-
-        }
+////        while (iterator!!.hasNext() && i <= 15) {
+//        while (globalIterator.hasNext()) {
+//            try {
+//                val element = globalIterator.next()
+////            Timber.d("Transcription for unmerged: " + tokenizedContent.toString())
+////            Timber.d("Transcription for merged: " + mergeRanges(tokenizedContent).toString())
+//
+//
+//                Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
+//                Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
+//
+////            if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
+//                val progression = element.locator.locations.totalProgression
+//
+//                if (progression != null && currentAudioProgression != null) {
+//                    Timber.d("Transcription for: " + progression)
+//                    // Calculate the difference between locator progression and currentAudioProgression
+//                    val difference = progression - currentAudioProgression
+//
+//                    // Check if the difference is within 5% of currentAudioProgression
+//                    if (difference in progressionRange) {
+//                        // Execute the logic when the locator is within 5%
+//                        // Break out of the loop
+//                        break
+//                    }
+//                }
+//            }  catch (e: Exception) {
+//                Timber.d("Transcription for catching has next: " + i)
+//            }
+//
+//        }
 
         while (globalIterator.hasNext()) {
             try {
@@ -1660,7 +1664,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 
-            if ((i >= 15 || locators.count() >= 60) && full){
+            if ((i >= 15 || locators.count() >= 120) && full){
                 break
             }
 
@@ -1676,11 +1680,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val difference = progression - currentAudioProgression
 
                 // Check if the difference is within 5% of currentAudioProgression
-                if (difference !in progressionRange) {
-                    // Execute the logic when the locator is within 5%
-                    // Break out of the loop
-                    break
-                }
+//                if (difference !in progressionRange) {
+//                    // Execute the logic when the locator is within 5%
+//                    // Break out of the loop
+//                    break
+//                }
             }
 
             } catch (e: Exception) {
@@ -1819,7 +1823,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            transcriptionMap.clear()
             locatorMap.clear()
             binding.loadingOverlay.visibility = View.VISIBLE
-            globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
+            val firstLocator = (navigator as? VisualNavigator)?.firstVisibleElementLocator()!!
+            Timber.d("Transcription for firstVisibleElementLocator() ${firstLocator.text.highlight}")
+
+            globalIterator = publication.content(firstLocator)!!.iterator()
 
             try {
 
@@ -2344,6 +2351,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         navigator.go(pageLocator, true)
                         CachedWebView = findAllWebViews(requireView())
                     }
+                }
+
+                if (!settingsScroll){
+                    navigator.go(pageLocator, true)
                 }
 
 
