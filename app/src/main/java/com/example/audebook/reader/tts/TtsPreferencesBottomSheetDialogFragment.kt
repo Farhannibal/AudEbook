@@ -14,7 +14,7 @@ import com.example.audebook.reader.preferences.UserPreferencesViewModel
 
 @OptIn(ExperimentalReadiumApi::class)
 class TtsPreferencesBottomSheetDialogFragment : UserPreferencesBottomSheetDialogFragment(
-    "TTS Settings"
+    "Scroll Speed Settings"
 ) {
 
     private val viewModel: ReaderViewModel by activityViewModels()
@@ -22,4 +22,5 @@ class TtsPreferencesBottomSheetDialogFragment : UserPreferencesBottomSheetDialog
     override val preferencesModel: UserPreferencesViewModel<*, *> by lazy {
         checkNotNull(viewModel.tts!!.preferencesModel)
     }
+
 }

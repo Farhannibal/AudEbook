@@ -140,10 +140,10 @@ private fun <P : Configurable.Preferences<P>, E : PreferencesEditor<P>> UserPref
             is TtsPreferencesEditor ->
                 MediaUserPreferences(
                     commit = commit,
-                    language = editor.language,
-                    voice = editor.voice,
-                    speed = editor.speed,
-                    pitch = editor.pitch
+//                    language = editor.language,
+//                    voice = editor.voice,
+                    scrollspeed = editor.speed,
+//                    pitch = editor.pitch
                 )
             is ExoPlayerPreferencesEditor ->
                 MediaUserPreferences(

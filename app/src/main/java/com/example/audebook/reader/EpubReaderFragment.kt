@@ -102,6 +102,7 @@ import com.example.audebook.domain.Bookshelf
 import com.example.audebook.domain.PublicationRetriever
 import com.example.audebook.reader.preferences.AudioPreferencesBottomSheetDialogFragment
 import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
+import com.example.audebook.reader.tts.TtsPreferencesBottomSheetDialogFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -127,6 +128,7 @@ import kotlin.Exception
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
+import org.readium.navigator.media.tts.android.AndroidTtsPreferences
 
 
 @OptIn(ExperimentalReadiumApi::class)
@@ -195,6 +197,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     lateinit var globalIterator: Content.Iterator
 
     lateinit var audioDialog: AudioPreferencesBottomSheetDialogFragment
+
+    lateinit var scrollSpeedDialog: TtsPreferencesBottomSheetDialogFragment
 
     lateinit var inputFilePath: String
 
@@ -485,6 +489,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        binding.transcribe.setOnClickListener(this::onExtractAndTranscribe)
         binding.loadAudioBook.setOnClickListener(this::onLoadAudioBook )
         binding.setSpeed.setOnClickListener(this::onSetSpeed )
+        binding.setScrollSpeed.setOnClickListener(this::onSetScrollSpeed )
         updateControlsLayoutBackground(false)
 
         CachedWebView = findAllWebViews(requireView())
@@ -723,6 +728,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //            Timber.d(AudioPreferencesBottomSheetDialogFragment().audioPreferencesModel.toString())
 //        }
 
+        scrollSpeedDialog = TtsPreferencesBottomSheetDialogFragment()
+
+//        scrollSpeedDialog.show(childFragmentManager, "TtsSettings")
+//        scrollSpeedDialog.dismiss()
+
         return Try.success(navigator)
     }
 
@@ -881,7 +891,66 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 // Set the image of the setSpeed button
                 binding.setSpeed.setImageResource(speedDrawable)
 
+                var scrollspeed: Double? = null
+                try {
+//                    if(scrollSpeedDialog.isAdded) {
+                    scrollspeed =
+                        (scrollSpeedDialog.preferencesModel.editor.value.preferences as AndroidTtsPreferences).speed
+//                    }
+                } catch (e: Exception){
+                    Timber.d("Transcription for scrollSpeedDialog: $e")
+                }
 
+                val roundedScrollSpeed = if (scrollspeed == null) { 1.0 } else {
+                    when {
+                        scrollspeed <= 0.75 -> 0.5
+                        scrollspeed <= 0.95 -> 0.8
+                        scrollspeed <= 1.15 -> 1.0
+                        scrollspeed <= 1.45 -> 1.2
+                        scrollspeed <= 1.75 -> 1.5
+                        scrollspeed <= 1.95 -> 1.8
+                        scrollspeed <= 2.15 -> 2.0
+                        scrollspeed <= 2.45 -> 2.2
+                        scrollspeed <= 2.75 -> 2.5
+                        scrollspeed <= 2.95 -> 2.8
+                        scrollspeed <= 3.15 -> 3.0
+                        scrollspeed <= 3.45 -> 3.2
+                        scrollspeed <= 3.75 -> 3.5
+                        scrollspeed <= 3.95 -> 3.8
+                        scrollspeed <= 4.15 -> 4.0
+                        scrollspeed <= 4.45 -> 4.2
+                        scrollspeed <= 4.75 -> 4.5
+                        scrollspeed <= 4.95 -> 4.8
+                        else -> 5.0
+                    }
+                }
+
+                // Map the settingsSpeed to the corresponding drawable resource
+                val scrollSpeedDrawable = when (roundedScrollSpeed) {
+                    0.5 -> R.drawable.ic_icon_playback_speed_0_5
+                    0.8 -> R.drawable.ic_icon_playback_speed_0_8
+                    1.0 -> R.drawable.ic_icon_playback_speed_1_0
+                    1.2 -> R.drawable.ic_icon_playback_speed_1_2
+                    1.5 -> R.drawable.ic_icon_playback_speed_1_5
+                    1.8 -> R.drawable.ic_icon_playback_speed_1_8
+                    2.0 -> R.drawable.ic_icon_playback_speed_2_0
+                    2.2 -> R.drawable.ic_icon_playback_speed_2_2
+                    2.5 -> R.drawable.ic_icon_playback_speed_2_5
+                    2.8 -> R.drawable.ic_icon_playback_speed_2_8
+                    3.0 -> R.drawable.ic_icon_playback_speed_3_0
+                    3.2 -> R.drawable.ic_icon_playback_speed_3_2
+                    3.5 -> R.drawable.ic_icon_playback_speed_3_5
+                    3.8 -> R.drawable.ic_icon_playback_speed_3_8
+                    4.0 -> R.drawable.ic_icon_playback_speed_4_0
+                    4.2 -> R.drawable.ic_icon_playback_speed_4_2
+                    4.5 -> R.drawable.ic_icon_playback_speed_4_5
+                    4.8 -> R.drawable.ic_icon_playback_speed_4_8
+                    5.0 -> R.drawable.ic_icon_playback_speed_5_0
+                    else -> R.drawable.ic_icon_playback_speed_1_0 // Default to 1.0x if no match
+                }
+
+                // Set the image of the setSpeed button
+                binding.setScrollSpeed.setImageResource(scrollSpeedDrawable)
 
 //                var currentSegment = getPlaybackTranscribeSegment()
 //                var iterations = 1
@@ -1107,6 +1176,14 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             audioDialog.show(childFragmentManager, "Settings")
 //            MainPreferencesBottomSheetDialogFragment()
 //                .show(childFragmentManager, "Settings")
+        }
+    }
+
+    private fun onSetScrollSpeed(@Suppress("UNUSED_PARAMETER") view: View) {
+        model.viewModelScope.launch {
+            scrollSpeedDialog
+                .show(childFragmentManager, "TtsSettings")
+
         }
     }
 
@@ -2540,10 +2617,21 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         webViewScrollJob?.cancel()
         webViewScrollJob = viewLifecycleOwner.lifecycleScope.launch {
             while (latestPlaybackStatus.playWhenReady && isActive) {
-                CachedWebView.forEach {
-                    it.scrollBy(0, 4)
+                var scrollspeed: Double? = null
+                try {
+//                    if(scrollSpeedDialog.isAdded) {
+                        scrollspeed =
+                            (scrollSpeedDialog.preferencesModel.editor.value.preferences as AndroidTtsPreferences).speed
+//                    }
+                } catch (e: Exception){
+                    Timber.d("Transcription for scrollSpeedDialog: $e")
                 }
-                delay(100) // 0.1 seconds
+                if (scrollspeed == null)
+                    scrollspeed = 1.0
+                CachedWebView.forEach {
+                    it.scrollBy(0, (2 * scrollspeed).toInt())
+                }
+                delay(50) // 0.1 seconds
             }
         }
     }
