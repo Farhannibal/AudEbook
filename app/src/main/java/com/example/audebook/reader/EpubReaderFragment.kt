@@ -1959,6 +1959,19 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
+    suspend fun getMultipleFilePathFromContentUri(context: Context, contentUri: Uri): String? {
+        return withContext(Dispatchers.IO) {
+            var filePath: String? = null
+            val fileName = getFileName(context, contentUri)
+            if (fileName != null) {
+                val file = File(context.filesDir, fileName)
+                filePath = file.absolutePath
+                saveFileFromUri(context, contentUri, file)
+            }
+            filePath
+        }
+    }
+
 //    fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
 //        var filePath: String? = null
 //        val fileName = getFileName(context, contentUri)
@@ -2388,6 +2401,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val nextSegment = getNext15SecondInterval(playbackTranscribeSegment, 1)
         val nextLocators = locatorMap.getOrDefault(nextSegment,listOf<Locator>())
 
+        val matchedCount = matchedLocators?.count()
+
 
         matchedLocators?.isEmpty()?.let {
             if (!it) {
@@ -2592,6 +2607,29 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
+        if (matchedCount != null){
+            if (matchedCount <= 2){
+                val currentTime =
+                    roundTimestampToNearest15Seconds(playbackTranscribeSegment)
+                locators.clear()
+                locatorMap.entries.removeIf { it.key > currentTime }
+                currentNumberOfSegmentsListenedTo = 0
+                globalIterator =
+                    publication.content(latestLocatorPosition)!!
+                        .iterator()
+            }
+        }
+        if (matchedCount == null) {
+            val currentTime =
+                roundTimestampToNearest15Seconds(playbackTranscribeSegment)
+            locators.clear()
+            locatorMap.entries.removeIf { it.key > currentTime }
+            currentNumberOfSegmentsListenedTo = 0
+            globalIterator =
+                publication.content(latestLocatorPosition)!!
+                    .iterator()
+        }
+
 
 //        if (locators.count() < 100)
 //            getCurrentVisibleContentRange()
@@ -2629,9 +2667,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 if (scrollspeed == null)
                     scrollspeed = 1.0
                 CachedWebView.forEach {
-                    it.scrollBy(0, (2 * scrollspeed).toInt())
+                    it.scrollBy(0, 4)
                 }
-                delay(50) // 0.1 seconds
+                delay((100 / scrollspeed).toLong()) // 0.1 seconds
             }
         }
     }
