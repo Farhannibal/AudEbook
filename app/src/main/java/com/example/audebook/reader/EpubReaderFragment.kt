@@ -239,8 +239,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val sdcardDataFolder = ctx.getExternalFilesDir(null)
                 if (sdcardDataFolder != null) {
                     copyAssetsToSdcard(ctx, sdcardDataFolder, EXTENSIONS_TO_COPY)
-                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-base.en.tflite")
+//                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-base.en.tflite")
 //                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-tiny.en.tflite")
+                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-tiny-en.tflite")
+//                    val selectedTfliteFile = File(sdcardDataFolder, "Whisper-Tiny-En_WhisperEncoderInf.tflite")
                     val vocabFile = File(sdcardDataFolder, "filters_vocab_en.bin")
 
                     withContext(Dispatchers.Main) {
@@ -1002,7 +1004,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //
 //        Timber.d("Transcription for settingsSpeed: $settingsSpeed")
 
-        while (iterations <= 100) {
+        while (iterations <= 200) {
 
             if (iterations <= 5){
 //                val preferences = ExoPlayerPreferences(1.0,1.0)
