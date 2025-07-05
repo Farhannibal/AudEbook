@@ -148,8 +148,8 @@ private fun <P : Configurable.Preferences<P>, E : PreferencesEditor<P>> UserPref
             is ExoPlayerPreferencesEditor ->
                 MediaUserPreferences(
                     commit = commit,
-                    speed = editor.speed
-//                    pitch = editor.pitch
+                    speed = editor.speed,
+                    pitch = editor.pitch
                 )
         }
     }

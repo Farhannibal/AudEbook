@@ -215,6 +215,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     lateinit var CachedWebView: List<WebView>
 
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
             isSearchViewIconified = savedInstanceState.getBoolean(IS_SEARCH_VIEW_ICONIFIED)
@@ -803,7 +804,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         highlightText(locatorMap[playbackTranscribeSegment],playbackTranscribeSegment)
                     }
                 }
-            } else {
+            } else if (locatorMap.any()){
 //                model.viewModelScope.launch {
 //                    if (!locators.isEmpty())
 //                        loadThenPlayStart(listOf(playbackTranscribeSegment
@@ -821,13 +822,17 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                        }
 //                    }
 //                }
+                model.viewModelScope.launch {
+                    forceLocatorSync(playbackTranscribeSegment)
+                }
 
+                Timber.d("Transcription for no LocatorMap found")
             }
         }
 
 
 
-        if (currentTime - lastSaveTime >= 1000) { // 5 seconds
+        if (currentTime - lastSaveTime >= 3000) { // 5 seconds
             lastSaveTime = currentTime
             model.viewModelScope.launch {
                 application.bookRepository.saveAudiobookProgression(
@@ -1743,7 +1748,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val string = element.locator.text.highlight.toString()
                 val tokenizedContent = mergeRanges(tokenizer.tokenize(string),20)
 
-            if ((i >= 15 || locators.count() >= 120) && full){
+            if ((i >= 15 || locators.count() >= 90) && full){
                 break
             }
 
@@ -1864,6 +1869,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        locators.clear()
 //        audioNavigator.play()
         audioNavigator.pause()
+        locatorSyncingFlag = false
 
 //        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
 //        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
@@ -2034,7 +2040,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         animator.start()
     }
 
+    private var syncTranscriptionWithLocatorSyncingFlag = false
+
     suspend fun syncTranscriptionWithLocator(transcription: String, timestamp: String): List<Locator>{
+
         val startTimeGetContent = System.currentTimeMillis()
 //        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
 //            navigator.applyDecorations(
@@ -2524,46 +2533,48 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     )
 
                     if (currentNumberOfSegmentsListenedTo >= 6) {
-                        currentNumberOfSegmentsListenedTo = 0
+//                        currentNumberOfSegmentsListenedTo = 0
 //                        audioNavigator.pause()
 
-                        model.viewModelScope.launch {
-                            val currentTime =
-                                roundTimestampToNearest15Seconds(playbackTranscribeSegment)
-                            locators.clear()
-//            transcriptionMap.clear()
-                            // Clear only entries after currentTime
-                            locatorMap.entries.removeIf { it.key > currentTime }
-
-//                            binding.loadingOverlay.visibility = View.VISIBLE
-                            globalIterator =
-                                publication.content(latestLocatorPosition)!!
-                                    .iterator()
-
-
-
-//                        if (globalIterator.hasPrevious())
-//                            globalIterator.previous().locator
+//                        model.viewModelScope.launch {
+//                            val currentTime =
+//                                roundTimestampToNearest15Seconds(playbackTranscribeSegment)
+//                            locators.clear()
+////            transcriptionMap.clear()
+//                            // Clear only entries after currentTime
+//                            locatorMap.entries.removeIf { it.key > currentTime }
 //
-//                        if (globalIterator.hasPrevious())
-//                            globalIterator.previous().locator
+////                            binding.loadingOverlay.visibility = View.VISIBLE
+//                            globalIterator =
+//                                publication.content(latestLocatorPosition)!!
+//                                    .iterator()
+//
+//
+//
+////                        if (globalIterator.hasPrevious())
+////                            globalIterator.previous().locator
+////
+////                        if (globalIterator.hasPrevious())
+////                            globalIterator.previous().locator
+//
+//                            getCurrentVisibleContentRange(true)
+//
+//
+//
+//                            transcriptionMap.filterKeys { it > currentTime }
+//                                .forEach { (transcriptionTimestamp, result) ->
+//                                    locatorMap[transcriptionTimestamp] =
+//                                        syncTranscriptionWithLocator(result, transcriptionTimestamp)
+//                                }
+//
+////                            loadThenPlayStart(
+////                                generateTranscriptionRanges(
+////                                    roundTimestampToNearest15Seconds(currentTime)
+////                                )
+////                            )
+//                        }
 
-                            getCurrentVisibleContentRange(true)
-
-
-
-                            transcriptionMap.filterKeys { it > currentTime }
-                                .forEach { (transcriptionTimestamp, result) ->
-                                    locatorMap[transcriptionTimestamp] =
-                                        syncTranscriptionWithLocator(result, transcriptionTimestamp)
-                                }
-
-//                            loadThenPlayStart(
-//                                generateTranscriptionRanges(
-//                                    roundTimestampToNearest15Seconds(currentTime)
-//                                )
-//                            )
-                        }
+                        forceLocatorSync(playbackTranscribeSegment)
 
                     }
                 }
@@ -2611,25 +2622,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         if (matchedCount != null){
             if (matchedCount <= 2){
-                val currentTime =
-                    roundTimestampToNearest15Seconds(playbackTranscribeSegment)
-                locators.clear()
-                locatorMap.entries.removeIf { it.key > currentTime }
-                currentNumberOfSegmentsListenedTo = 0
-                globalIterator =
-                    publication.content(latestLocatorPosition)!!
-                        .iterator()
+                forceLocatorSync(playbackTranscribeSegment)
             }
         }
         if (matchedCount == null) {
-            val currentTime =
-                roundTimestampToNearest15Seconds(playbackTranscribeSegment)
-            locators.clear()
-            locatorMap.entries.removeIf { it.key > currentTime }
-            currentNumberOfSegmentsListenedTo = 0
-            globalIterator =
-                publication.content(latestLocatorPosition)!!
-                    .iterator()
+            forceLocatorSync(playbackTranscribeSegment)
         }
 
 
@@ -2681,6 +2678,34 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         webViewScrollJob?.cancel()
         webViewScrollJob = null
     }
+    suspend fun forceLocatorSync(playbackTranscribeSegment: String){
+        if (locatorSyncingFlag == false) {
+            locatorSyncingFlag = true
+            val currentTime =
+                roundTimestampToNearest15Seconds(playbackTranscribeSegment)
+            locators.clear()
+            locatorMap.entries.removeIf { it.key >= currentTime }
+            currentNumberOfSegmentsListenedTo = 0
+            globalIterator =
+                publication.content(latestLocatorPosition)!!
+                    .iterator()
+
+//            globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
+
+            getCurrentVisibleContentRange(true)
+
+            transcriptionMap.filterKeys { it >= currentTime }
+                .forEach { (transcriptionTimestamp, result) ->
+                    locatorMap[transcriptionTimestamp] =
+                        syncTranscriptionWithLocator(result, transcriptionTimestamp)
+                }
+
+            locatorSyncingFlag = false
+        }
+    }
+
+    private var locatorSyncingFlag = false
+
 
 }
 

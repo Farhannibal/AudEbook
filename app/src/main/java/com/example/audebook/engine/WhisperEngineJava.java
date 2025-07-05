@@ -15,6 +15,7 @@ import org.tensorflow.lite.Tensor;
 //import org.tensorflow.lite.gpu.CompatibilityList;
 //import org.tensorflow.lite.gpu.GpuDelegate;
 //import org.tensorflow.lite.nnapi.NnApiDelegate;
+import org.tensorflow.lite.nnapi.NnApiDelegate;
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
 import java.io.FileInputStream;
@@ -98,8 +99,9 @@ public class WhisperEngineJava implements WhisperEngine {
 
         // Set the number of threads for inference
         Interpreter.Options options = new Interpreter.Options();
-        options.setNumThreads(Runtime.getRuntime().availableProcessors());
-//        options.setUseXNNPACK(true);
+//        options.setNumThreads(Runtime.getRuntime().availableProcessors()/2);
+        options.setNumThreads(1);
+        options.setUseXNNPACK(false);
 
 //        boolean isNNAPI = true;
 //        if (isNNAPI) {
