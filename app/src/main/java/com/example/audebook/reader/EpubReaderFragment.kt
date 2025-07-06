@@ -1209,7 +1209,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         model.viewModelScope.launch {
 //            audioNavigator.skipBackward()
             Timber.d("Load Audio Book")
-            
+
             sharedStoragePickerLauncher.launch(arrayOf("*/*"))
 
 //            try {

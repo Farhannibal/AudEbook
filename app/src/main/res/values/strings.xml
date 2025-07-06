@@ -18,18 +18,94 @@
 
     <string name="app_version_header">Version</string>
     <string name="app_version_label">App Version:</string>
-    <string name="app_version">2.2.0</string>
+    <string name="app_version">0.0.01</string>
     <string name="github_tab_label">GitHub Tag:</string>
-    <string name="github_tag">2.2.0</string>
+    <string name="github_tag">0.0.01</string>
 
     <string name="copyright_label">Copyright</string>
-    <string name="copyright">\@ 2019 European Digital Reading Lab</string>
+    <string name="copyright">\@ 2025 </string>
     <string name="bsd_license_label">[BSD-3 license]</string>
     <string name="bsd_license_label_accessible">[B S D 3 license]</string>
     <string name="acknowledgements_label">Acknowledgements</string>
-    <string name="acknowledgements_french_state">R2 Reader wouldn\'t have been developed without the financial help of the French state.</string>
+<!--    <string name="acknowledgements_french_state">R2 Reader wouldn\'t have been developed without the financial help of the French state.</string>-->
+    <string name="acknowledgements_french_state">This application is built using the following open-source libraries:
+
+<b>Reading &amp; Media:\n</b>
+• Readium Kotlin Toolkit - EPUB and audiobook support
+• ExoPlayer (via Media3) - Audio playback
+• FFmpeg Kit - Audio processing and format conversion
+
+<b>Machine Learning:</b>
+• TensorFlow Lite - On-device speech recognition and ML inference
+
+<b>Android Framework:</b>
+• AndroidX Libraries - Core Android components
+• Jetpack Compose - Modern UI toolkit
+• Room Database - Local data persistence
+• Material Design Components - UI components
+• Navigation Component - App navigation
+• DataStore - Preferences storage
+• WebKit - Web content rendering
+
+<b>Utilities:</b>
+• Timber - Logging
+• Picasso - Image loading
+• Kotlinx Coroutines - Asynchronous programming
+• Java String Similarity - Text comparison algorithms
+• Jsoup - HTML parsing
+• Joda-Time - Date and time handling
+
+We thank all the maintainers and contributors of these excellent open-source projects.</string>
     <string name="catalog_list_more">More</string>
     <string name="catalog_detail_download_button">Download</string>
+    <string name="Instructions">Acknowledgements</string>
+
+    <string name="instructions_title">How to Use</string>
+<string name="instructions_step1_title"><b>1. Import eBook, then Audiobook:</b></string>
+<string name="instructions_step1_line1">Open the app and tap on the Import (+) button.</string>
+<string name="instructions_step1_line2">Select a .epub file (<b>eBook must be selected FIRST</b>) and then when you open it, select the corresponding audiobook from your device storage.</string>
+
+<string name="instructions_step2_title"><b>2. Start The Audiobook at your desired Position:</b></string>
+<string name="instructions_step2_line1">Go to the position of the EPUB that corresponds to the Audiobook</string>
+<string name="instructions_step2_line2">Tap on the Anchor button to start transcribing the audiobook and anchor the audio to the text.</string>
+<string name="instructions_step2_line3">The app will process the audio and move the EPUB with the corresponding text in the book.</string>
+<string name="instructions_step2_line4">Once transcription is complete, the app will automatically sync the text with the eBook.</string>
+<string name="instructions_step2_line5">You can now switch between listening and reading seamlessly.</string>
+
+<string name="instructions_step3_title"><b>3. Read and Listen:</b></string>
+<string name="instructions_step3_line1">Use the built-in reader to read the eBook while listening to the audiobook.</string>
+<string name="instructions_step3_line2">The app will highlight the text as the audio plays for a synchronized experience.</string>
+
+<string name="acknowledgements_intro">This application is built using the following open-source libraries:</string>
+
+<string name="acknowledgements_reading_media_header"><b>Reading &amp; Media:</b></string>
+<string name="acknowledgements_readium">• Readium Kotlin Toolkit - EPUB and audiobook support</string>
+<string name="acknowledgements_exoplayer">• ExoPlayer (via Media3) - Audio playback</string>
+<string name="acknowledgements_ffmpeg">• FFmpeg Kit - Audio processing and format conversion</string>
+
+<string name="acknowledgements_ml_header"><b>Machine Learning:</b></string>
+<string name="acknowledgements_tensorflow">• TensorFlow Lite - On-device speech recognition and ML inference</string>
+
+<string name="acknowledgements_android_header"><b>Android Framework:</b></string>
+<string name="acknowledgements_androidx">• AndroidX Libraries - Core Android components</string>
+<string name="acknowledgements_compose">• Jetpack Compose - Modern UI toolkit</string>
+<string name="acknowledgements_room">• Room Database - Local data persistence</string>
+<string name="acknowledgements_material">• Material Design Components - UI components</string>
+<string name="acknowledgements_navigation">• Navigation Component - App navigation</string>
+<string name="acknowledgements_datastore">• DataStore - Preferences storage</string>
+<string name="acknowledgements_webkit">• WebKit - Web content rendering</string>
+
+<string name="acknowledgements_utilities_header"><b>Utilities:</b></string>
+<string name="acknowledgements_timber">• Timber - Logging</string>
+<string name="acknowledgements_picasso">• Picasso - Image loading</string>
+<string name="acknowledgements_coroutines">• Kotlinx Coroutines - Asynchronous programming</string>
+<string name="acknowledgements_string_similarity">• Java String Similarity - Text comparison algorithms</string>
+<string name="acknowledgements_jsoup">• Jsoup - HTML parsing</string>
+<string name="acknowledgements_joda">• Joda-Time - Date and time handling</string>
+
+<string name="acknowledgements_thanks">We thank all the maintainers and contributors of these excellent open-source projects.</string>
+
+
 
 
     <!-- Accessibility -->
