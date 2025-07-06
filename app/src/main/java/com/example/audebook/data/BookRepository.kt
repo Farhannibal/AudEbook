@@ -152,6 +152,9 @@ class BookRepository(
         return booksDao.insertAudioBookTranscript(book)
     }
 
+    suspend fun deleteAudiobookTranscript(id: Long) =
+        booksDao.deleteAudiobookTranscript(id)
+
     suspend fun deleteBook(id: Long) =
         booksDao.deleteBook(id)
 }

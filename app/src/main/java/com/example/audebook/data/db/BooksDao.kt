@@ -175,4 +175,10 @@ interface BooksDao {
         "UPDATE " + AudioBookTranscript.TABLE_NAME + " SET " + AudioBookTranscript.TRANSCRIPT + " = :locator WHERE " + AudioBookTranscript.ID + "= :id"
     )
     suspend fun saveAudiobookTranscript(locator: String, id: Long)
+
+    /**
+     * Deletes a bookmark
+     */
+    @Query("DELETE FROM " + AudioBookTranscript.TABLE_NAME + " WHERE " + AudioBookTranscript.BOOKID + " = :id")
+    suspend fun deleteAudiobookTranscript(id: Long)
 }
