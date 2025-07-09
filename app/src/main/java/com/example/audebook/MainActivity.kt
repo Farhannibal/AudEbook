@@ -14,8 +14,10 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
+import com.example.audebook.bookshelf.WelcomeBottomSheetDialogFragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.snackbar.Snackbar
+import android.content.Context
 
 
 class MainActivity : AppCompatActivity() {
@@ -43,6 +45,21 @@ class MainActivity : AppCompatActivity() {
         navView.setupWithNavController(navController)
 
         viewModel.channel.receive(this) { handleEvent(it) }
+
+        // Check if we should show the welcome message
+        if (shouldShowWelcome()) {
+            showWelcomeDialog()
+        }
+    }
+
+    private fun shouldShowWelcome(): Boolean {
+        val sharedPref = getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
+        return !sharedPref.getBoolean("welcome_shown", false)
+    }
+
+    private fun showWelcomeDialog() {
+        val welcomeDialog = WelcomeBottomSheetDialogFragment()
+        welcomeDialog.show(supportFragmentManager, "WelcomeDialog")
     }
 
     override fun onSupportNavigateUp(): Boolean {
