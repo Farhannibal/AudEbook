@@ -42,6 +42,9 @@ public class Whisper {
     private String mWavFilePath;
     private WhisperListener mUpdateListener;
 
+    // Applied by the worker just before its next transcription, so it never races an inference
+    private volatile int mRequestedThreads = 0;
+
     private final Lock taskLock = new ReentrantLock();
     private final Condition hasTask = taskLock.newCondition();
     private volatile boolean taskAvailable = false;
@@ -78,6 +81,14 @@ public class Whisper {
 
     public void unloadModel() {
         mWhisperEngine.deinitialize();
+    }
+
+    /**
+     * Requests a thread count for upcoming transcriptions. Returns immediately; the change takes
+     * effect when the next transcription starts, on the worker thread.
+     */
+    public void setNumThreads(int numThreads) {
+        mRequestedThreads = numThreads;
     }
 
     public void setAction(Action action) {
@@ -137,6 +148,10 @@ public class Whisper {
 
                     String result = null;
                     synchronized (mWhisperEngine) {
+                        int requestedThreads = mRequestedThreads;
+                        if (requestedThreads > 0) {
+                            mWhisperEngine.setNumThreads(requestedThreads);
+                        }
                         if (mAction == Action.TRANSCRIBE) {
                             result = mWhisperEngine.transcribeFile(mWavFilePath);
                         } else {

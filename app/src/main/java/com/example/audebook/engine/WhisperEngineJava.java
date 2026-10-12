@@ -29,10 +29,11 @@ public class WhisperEngineJava implements WhisperEngine {
     private final WhisperUtil mWhisperUtil = new WhisperUtil();
 
     private final Context mContext;
-    private final int mNumThreads;
+    private int mNumThreads;
     private final boolean mUseXnnpack;
     private boolean mIsInitialized = false;
     private Interpreter mInterpreter = null;
+    private ByteBuffer mModelBuffer = null;
 //    private GpuDelegate gpuDelegate;
 
     // Measured on a Galaxy S24+ (WhisperBenchmarkTest): one thread transcribes a 10 s clip in
@@ -83,6 +84,7 @@ public class WhisperEngineJava implements WhisperEngine {
             mInterpreter.close();
             mInterpreter = null; // Optional: Set to null to avoid accidental reuse
         }
+        mModelBuffer = null;
     }
 
     @Override
@@ -106,14 +108,35 @@ public class WhisperEngineJava implements WhisperEngine {
         return null;
     }
 
+    /**
+     * TFLite fixes the thread count when the interpreter is created, so changing it rebuilds the
+     * interpreter from the already-mapped model. Does nothing if the count is unchanged. Must not
+     * be called while a transcription is running.
+     */
+    @Override
+    public void setNumThreads(int numThreads) {
+        if (numThreads == mNumThreads) return;
+        mNumThreads = numThreads;
+        if (mInterpreter == null) return;
+
+        long startedAt = System.currentTimeMillis();
+        mInterpreter.close();
+        mInterpreter = new Interpreter(mModelBuffer, createOptions());
+        Log.d(TAG, "Switched to " + numThreads + " threads in " + (System.currentTimeMillis() - startedAt) + " ms");
+    }
+
     // Load TFLite model
     private void loadModel(String modelPath) throws IOException {
         FileInputStream fileInputStream = new FileInputStream(modelPath);
         FileChannel fileChannel = fileInputStream.getChannel();
         long startOffset = 0;
         long declaredLength = fileChannel.size();
-        ByteBuffer tfliteModel = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+        mModelBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
 
+        mInterpreter = new Interpreter(mModelBuffer, createOptions());
+    }
+
+    private Interpreter.Options createOptions() {
         // Set the number of threads for inference
         Interpreter.Options options = new Interpreter.Options();
 //        options.setNumThreads(Runtime.getRuntime().availableProcessors()/2);
@@ -158,7 +181,7 @@ public class WhisperEngineJava implements WhisperEngine {
 //            options.addDelegate(gpuDelegate);
 //        }
 
-        mInterpreter = new Interpreter(tfliteModel, options);
+        return options;
     }
 
     private float[] getMelSpectrogram(String wavePath) {

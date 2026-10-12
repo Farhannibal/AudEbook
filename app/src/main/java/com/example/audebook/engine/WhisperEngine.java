@@ -8,4 +8,5 @@ public interface WhisperEngine {
     void deinitialize();
     String transcribeFile(String wavePath);
     String transcribeBuffer(float[] samples);
+    void setNumThreads(int numThreads);
 }

@@ -4,12 +4,15 @@ import android.net.Uri
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.audebook.asr.Whisper
 import com.example.audebook.engine.WhisperEngineJava
 import com.example.audebook.utils.AudioSegmentExtractor
 import com.example.audebook.utils.WaveUtil
 import com.example.audebook.utils.WhisperUtil
 import info.debatty.java.stringsimilarity.JaroWinkler
 import java.io.File
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -101,6 +104,109 @@ class WhisperBenchmarkTest {
         }
 
         clips.forEach { it.delete() }
+    }
+
+    /**
+     * Simulates Anchor: the three slots it waits for, at the 1-thread default versus switching
+     * to 4 threads, transcribing, and switching back (both rebuilds included in the time).
+     */
+    @Test
+    fun anchorWithThreadSwitch() {
+        val input = listOf("sample.m4a", "sample.m4b", "sample.mp3")
+            .map { File("/data/local/tmp/audtest", it) }
+            .firstOrNull { it.canRead() }
+        assumeTrue("no sample pushed to /data/local/tmp/audtest", input != null)
+
+        val clips = AudioSegmentExtractor.open(context, Uri.fromFile(input)).use { extractor ->
+            (0 until 3).map { i ->
+                File(context.cacheDir, "anchor_$i.wav").also {
+                    check(extractor.extractToWav(it.absolutePath, 600 + i * 10, 10))
+                }
+            }
+        }
+        val model = copyAsset("whisper-tiny-en.tflite")
+        val vocab = copyAsset("filters_vocab_en.bin")
+        val engine = WhisperEngineJava(context)
+        engine.initialize(model.absolutePath, vocab.absolutePath, false)
+        try {
+            engine.transcribeFile(clips[0].absolutePath) // warm-up at the default
+
+            val singleTimes = mutableListOf<Long>()
+            val boostedTimes = mutableListOf<Long>()
+            val switchUpTimes = mutableListOf<Long>()
+            val switchDownTimes = mutableListOf<Long>()
+            lateinit var singleTexts: List<String>
+            lateinit var boostedTexts: List<String>
+            repeat(3) {
+                var startedAt = System.currentTimeMillis()
+                singleTexts = clips.map { engine.transcribeFile(it.absolutePath) }
+                singleTimes += System.currentTimeMillis() - startedAt
+
+                startedAt = System.currentTimeMillis()
+                engine.setNumThreads(4)
+                val switchedAt = System.currentTimeMillis()
+                boostedTexts = clips.map { engine.transcribeFile(it.absolutePath) }
+                val transcribedAt = System.currentTimeMillis()
+                engine.setNumThreads(WhisperEngineJava.DEFAULT_NUM_THREADS)
+                val doneAt = System.currentTimeMillis()
+                boostedTimes += doneAt - startedAt
+                switchUpTimes += switchedAt - startedAt
+                switchDownTimes += doneAt - transcribedAt
+            }
+
+            Log.i(TAG, "anchor, 3 slots at 1 thread: median ${singleTimes.median()} ms")
+            Log.i(
+                TAG,
+                "anchor, 3 slots boosted to 4 threads: median ${boostedTimes.median()} ms " +
+                    "(switch up ${switchUpTimes.median()} ms, switch down ${switchDownTimes.median()} ms)"
+            )
+            Log.i(TAG, "anchor transcripts identical: ${singleTexts == boostedTexts}")
+            assertTrue("boosted transcripts differ", singleTexts == boostedTexts)
+        } finally {
+            engine.deinitialize()
+            clips.forEach { it.delete() }
+        }
+    }
+
+    /** Whisper.setNumThreads must take effect on the worker, before the next transcription. */
+    @Test
+    fun whisperWorkerAppliesThreadRequest() {
+        val input = listOf("sample.m4a", "sample.m4b", "sample.mp3")
+            .map { File("/data/local/tmp/audtest", it) }
+            .firstOrNull { it.canRead() }
+        assumeTrue("no sample pushed to /data/local/tmp/audtest", input != null)
+
+        val clip = File(context.cacheDir, "worker.wav")
+        AudioSegmentExtractor.open(context, Uri.fromFile(input)).use { check(it.extractToWav(clip.absolutePath, 600, 10)) }
+        val whisper = Whisper(context)
+        whisper.loadModel(copyAsset("whisper-tiny-en.tflite"), copyAsset("filters_vocab_en.bin"), false)
+
+        fun transcribe(): String {
+            val results = LinkedBlockingQueue<String>()
+            whisper.setListener(object : Whisper.WhisperListener {
+                override fun onUpdateReceived(message: String) {}
+                override fun onResultReceived(result: String) {
+                    results.put(result)
+                }
+            })
+            whisper.setFilePath(clip.absolutePath)
+            whisper.setAction(Whisper.ACTION_TRANSCRIBE)
+            whisper.start()
+            return results.poll(60, TimeUnit.SECONDS) ?: error("no transcription within 60 s")
+        }
+
+        try {
+            val atDefault = transcribe()
+            whisper.setNumThreads(4)
+            val boosted = transcribe()
+            whisper.setNumThreads(WhisperEngineJava.DEFAULT_NUM_THREADS)
+            val backToDefault = transcribe()
+            Log.i(TAG, "worker thread switching: transcripts identical ${atDefault == boosted && boosted == backToDefault}")
+            assertTrue(atDefault == boosted && boosted == backToDefault)
+        } finally {
+            whisper.unloadModel()
+            clip.delete()
+        }
     }
 
     /** The optimised mel spectrogram must match the original bit for bit, so transcripts can't change. */

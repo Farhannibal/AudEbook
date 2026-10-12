@@ -73,6 +73,7 @@ import java.util.Locale
 import com.example.audebook.Readium
 import com.example.audebook.Application
 import com.example.audebook.asr.Whisper
+import com.example.audebook.engine.WhisperEngineJava
 import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.toUserError
 import com.example.audebook.utils.UserError
@@ -690,6 +691,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         // Longest Anchor will keep the loading overlay up waiting for the first slots
         private const val ANCHOR_TIMEOUT_MS = 60_000L
+
+        // Fastest setting measured on a Galaxy S24+; 8 threads was slower than 4
+        private const val ANCHOR_WHISPER_THREADS = 4
     }
 
     private suspend fun openAudio(
@@ -2406,20 +2410,27 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             getCurrentVisibleContentRange()
 //        transcribeAudio(timestamp)
         Timber.d("Transcription for loadThenPlayStart")
-        val finished = withTimeoutOrNull(ANCHOR_TIMEOUT_MS) {
-            for (timestamp in timestamps) {
-                // transcribeAudio() ignores requests while Whisper is busy, so keep asking.
-                // delay() frees the main thread, which is where Whisper's result is delivered.
-                while (!transcriptionMap.containsKey(timestamp)) {
-                    transcribeAudio(timestamp)
-                    Timber.d("Transcription for loadThenPlayStart: " + timestamp)
-                    if (timestamp == timestamps.last()) {
-                        break
+        // The user is waiting on the overlay, so trade some battery for speed until playback
+        // starts, then drop back to the low-power default for steady transcription
+        mWhisper?.setNumThreads(ANCHOR_WHISPER_THREADS)
+        val finished = try {
+            withTimeoutOrNull(ANCHOR_TIMEOUT_MS) {
+                for (timestamp in timestamps) {
+                    // transcribeAudio() ignores requests while Whisper is busy, so keep asking.
+                    // delay() frees the main thread, which is where Whisper's result is delivered.
+                    while (!transcriptionMap.containsKey(timestamp)) {
+                        transcribeAudio(timestamp)
+                        Timber.d("Transcription for loadThenPlayStart: " + timestamp)
+                        if (timestamp == timestamps.last()) {
+                            break
+                        }
+                        delay(100)
                     }
-                    delay(100)
+                    Timber.d("Transcription for timestamp: " + timestamp)
                 }
-                Timber.d("Transcription for timestamp: " + timestamp)
             }
+        } finally {
+            mWhisper?.setNumThreads(WhisperEngineJava.DEFAULT_NUM_THREADS)
         }
         if (finished == null) {
             Timber.w("Anchor gave up waiting for transcripts after $ANCHOR_TIMEOUT_MS ms; playing anyway")
