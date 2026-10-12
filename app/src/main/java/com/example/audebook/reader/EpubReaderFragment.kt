@@ -60,7 +60,6 @@ import org.readium.r2.navigator.VisualNavigator
 import org.readium.r2.shared.publication.services.content.content
 import timber.log.Timber
 
-import info.debatty.java.stringsimilarity.JaroWinkler
 import org.readium.navigator.media.common.TimeBasedMediaNavigator
 import org.readium.r2.shared.publication.Publication
 
@@ -97,6 +96,7 @@ import kotlin.time.DurationUnit
 
 
 import com.example.audebook.utils.AudioSegmentExtractor
+import com.example.audebook.utils.TranscriptMatcher
 import com.example.audebook.domain.Bookshelf
 //import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationRetriever
@@ -105,6 +105,9 @@ import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactor
 import com.example.audebook.reader.tts.TtsPreferencesBottomSheetDialogFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.readium.r2.shared.util.AbsoluteUrl
 import org.readium.r2.shared.util.format.Format
 import org.readium.r2.shared.util.toUrl
@@ -203,6 +206,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     // Reads the audiobook in place; opened in loadAudiobookNavigator, closed in onDestroy
     private var audioSegmentExtractor: AudioSegmentExtractor? = null
     private var isExtractingSegment = false
+
+    // Serializes syncTranscriptionWithLocator, whose matching runs off the main thread
+    private val syncMutex = Mutex()
 
     var currentHighlight: List<Locator> = listOf<Locator>()
 
@@ -681,6 +687,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         private const val SEARCH_FRAGMENT_TAG = "search"
         private const val NAVIGATOR_FRAGMENT_TAG = "navigator"
         private const val IS_SEARCH_VIEW_ICONIFIED = "isSearchViewIconified"
+
+        // Longest Anchor will keep the loading overlay up waiting for the first slots
+        private const val ANCHOR_TIMEOUT_MS = 60_000L
     }
 
     private suspend fun openAudio(
@@ -2081,7 +2090,18 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private var syncTranscriptionWithLocatorSyncingFlag = false
 
+    /**
+     * Matches a slot's transcript against the EPUB chunks in [locators]. Calls are serialized so
+     * one sync can't consume chunks while another is still matching against them.
+     */
     suspend fun syncTranscriptionWithLocator(
+        transcription: String,
+        timestamp: String
+    ): List<Locator> = syncMutex.withLock {
+        matchTranscriptionToLocators(transcription, timestamp)
+    }
+
+    private suspend fun matchTranscriptionToLocators(
         transcription: String,
         timestamp: String
     ): List<Locator> {
@@ -2169,16 +2189,20 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
 //        val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
 
-        for (locator in locatorSlice) {
-//            if (locator in prevLocators) continue
+        // The fuzzy matching is the expensive part, so run it on a background thread against a
+        // snapshot. locatorSlice is a prefix of locators, so its indices are locators indices.
+        val snapshot = locators.toList()
+        val chunkTexts = locatorSlice.map { it.text.highlight.toString() }
+        matchedIndexs.addAll(withContext(Dispatchers.Default) {
+            TranscriptMatcher.findMatchingChunks(chunkTexts, transcription)
+        })
 
-            val text = locator.text.highlight.toString()
-            if (isSentenceInParagraph(text, transcription)) {
-//                matchedLocators.add(locator)
-//                matchedDebugTest.add(locator.text.highlight.toString())
-                matchedIndexs.add(locators.indexOf(locator))
-//                Timber.d("Transcription for: " + locator.text.highlight.toString())
-            }
+        // Anchor, a forced re-sync or the end of playback can rebuild locators on the main
+        // thread while matching runs. If so, the indices no longer apply; report no match and
+        // let the normal re-sync path pick it up.
+        if (locators.size < snapshot.size || snapshot.indices.any { locators[it] !== snapshot[it] }) {
+            Timber.d("Chunk list changed during matching; dropping result for $timestamp")
+            return emptyList()
         }
 
 
@@ -2250,31 +2274,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return matchedLocators
     }
 
-    private fun isSentenceInParagraph(
-        sentence: String,
-        paragraph: String,
-        threshold: Double = 0.75
-    ): Boolean {
-        val jaroWinkler = JaroWinkler()
-        val cleanedParagraph = removePunctuation(paragraph).lowercase()
-        val cleanedSentence = removePunctuation(sentence).lowercase()
-        val words = cleanedParagraph.split(" ")
-        val sentenceWords = cleanedSentence.split(" ")
-
-        for (i in 0..(words.size - sentenceWords.size)) {
-            val subParagraph = words.subList(i, i + sentenceWords.size).joinToString(" ")
-            val similarity = jaroWinkler.similarity(cleanedSentence, subParagraph)
-            if (similarity >= threshold) {
-                Timber.d("$cleanedSentence | $similarity")
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun removePunctuation(text: String): String {
-        return text.replace(Regex("[^\\w\\s]"), "")
-    }
 
 
 //    fun findLongestRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
@@ -2406,20 +2405,24 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         if (locators.isEmpty())
             getCurrentVisibleContentRange()
 //        transcribeAudio(timestamp)
-        var currentTime = System.currentTimeMillis()
         Timber.d("Transcription for loadThenPlayStart")
-        for (timestamp in timestamps) {
-            while (!transcriptionMap.containsKey(timestamp)) {
-                if (System.currentTimeMillis() - currentTime >= 100) {
-                    currentTime = System.currentTimeMillis()
+        val finished = withTimeoutOrNull(ANCHOR_TIMEOUT_MS) {
+            for (timestamp in timestamps) {
+                // transcribeAudio() ignores requests while Whisper is busy, so keep asking.
+                // delay() frees the main thread, which is where Whisper's result is delivered.
+                while (!transcriptionMap.containsKey(timestamp)) {
                     transcribeAudio(timestamp)
                     Timber.d("Transcription for loadThenPlayStart: " + timestamp)
                     if (timestamp == timestamps.last()) {
                         break
                     }
+                    delay(100)
                 }
+                Timber.d("Transcription for timestamp: " + timestamp)
             }
-            Timber.d("Transcription for timestamp: " + timestamp)
+        }
+        if (finished == null) {
+            Timber.w("Anchor gave up waiting for transcripts after $ANCHOR_TIMEOUT_MS ms; playing anyway")
         }
         audioNavigator.play()
         updateControlsLayoutBackground(true)
