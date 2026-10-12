@@ -29,12 +29,27 @@ public class WhisperEngineJava implements WhisperEngine {
     private final WhisperUtil mWhisperUtil = new WhisperUtil();
 
     private final Context mContext;
+    private final int mNumThreads;
+    private final boolean mUseXnnpack;
     private boolean mIsInitialized = false;
     private Interpreter mInterpreter = null;
 //    private GpuDelegate gpuDelegate;
 
+    // Measured on a Galaxy S24+ (WhisperBenchmarkTest): one thread transcribes a 10 s clip in
+    // ~1.5 s, well ahead of playback, and uses the least CPU time per clip. More threads finish
+    // sooner but cost more total CPU, which shows up as heat and battery drain. XNNPACK gives
+    // identical transcripts and is ~6% faster.
+    public static final int DEFAULT_NUM_THREADS = 1;
+    public static final boolean DEFAULT_USE_XNNPACK = true;
+
     public WhisperEngineJava(Context context) {
+        this(context, DEFAULT_NUM_THREADS, DEFAULT_USE_XNNPACK);
+    }
+
+    public WhisperEngineJava(Context context, int numThreads, boolean useXnnpack) {
         mContext = context;
+        mNumThreads = numThreads;
+        mUseXnnpack = useXnnpack;
     }
 
     @Override
@@ -73,13 +88,15 @@ public class WhisperEngineJava implements WhisperEngine {
     @Override
     public String transcribeFile(String wavePath) {
         // Calculate Mel spectrogram
-        Log.d(TAG, "Calculating Mel spectrogram...");
+        long startedAt = System.currentTimeMillis();
         float[] melSpectrogram = getMelSpectrogram(wavePath);
-        Log.d(TAG, "Mel spectrogram is calculated...!");
+        long melDoneAt = System.currentTimeMillis();
 
         // Perform inference
         String result = runInference(melSpectrogram);
-        Log.d(TAG, "Inference is executed...!");
+        Log.d(TAG, "Transcribed in " + (System.currentTimeMillis() - startedAt) + " ms (mel "
+                + (melDoneAt - startedAt) + " ms, inference " + (System.currentTimeMillis() - melDoneAt)
+                + " ms, threads=" + mNumThreads + ", xnnpack=" + mUseXnnpack + ")");
 
         return result;
     }
@@ -100,8 +117,8 @@ public class WhisperEngineJava implements WhisperEngine {
         // Set the number of threads for inference
         Interpreter.Options options = new Interpreter.Options();
 //        options.setNumThreads(Runtime.getRuntime().availableProcessors()/2);
-        options.setNumThreads(1);
-        options.setUseXNNPACK(false);
+        options.setNumThreads(mNumThreads);
+        options.setUseXNNPACK(mUseXnnpack);
 
 //        boolean isNNAPI = true;
 //        if (isNNAPI) {
@@ -153,8 +170,8 @@ public class WhisperEngineJava implements WhisperEngine {
         int copyLength = Math.min(samples.length, fixedInputSize);
         System.arraycopy(samples, 0, inputSamples, 0, copyLength);
 
-        int cores = Runtime.getRuntime().availableProcessors();
-        return mWhisperUtil.getMelSpectrogram(inputSamples, inputSamples.length, cores);
+        // Use the same thread budget as inference, rather than every core
+        return mWhisperUtil.getMelSpectrogram(inputSamples, inputSamples.length, mNumThreads);
     }
 
     private String runInference(float[] inputData) {

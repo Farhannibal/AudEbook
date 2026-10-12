@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class WhisperUtil {
     private static final String TAG = "WhisperUtil";
@@ -168,20 +169,32 @@ public class WhisperUtil {
 
         int nFft = 1 + fftSize / 2;
 
+        // Clips are zero-padded to 30 s. A frame whose window lies entirely in that padding has
+        // all-zero FFT input, so every mel bin is the clamped floor. Fill those frames with the
+        // same value directly instead of computing ~2/3 of the FFTs on silence.
+        int lastNonZero = nSamples - 1;
+        while (lastNonZero >= 0 && samples[lastNonZero] == 0.0f) {
+            lastNonZero--;
+        }
+        final int activeFrames = lastNonZero < 0 ? 0 : Math.min(mel.nLen, lastNonZero / fftStep + 1);
+        final float silentValue = (float) log10(1e-10);
+        for (int j = 0; j < mel.nMel; j++) {
+            Arrays.fill(mel.data, j * mel.nLen + activeFrames, (j + 1) * mel.nLen, silentValue);
+        }
+        final int workerCount = Math.max(1, Math.min(nThreads, activeFrames));
+
 /////////////// UNCOMMENT below block to use multithreaded mel calculation /////////////////////////
         // Calculate mel values using multiple threads
         List<Thread> workers = new ArrayList<>();
-        for (int iw = 0; iw < nThreads; iw++) {
+        for (int iw = 0; iw < workerCount; iw++) {
             final int ith = iw;  // Capture iw in a final variable for use in the lambda
             Thread thread = new Thread(() -> {
                 // Inside the thread, ith will have the same value as iw (first value is 0)
-                Log.d(TAG, "Thread " + ith + " started.");
-
                 float[] fftIn = new float[fftSize];
                 Arrays.fill(fftIn, 0.0f);
                 float[] fftOut = new float[fftSize * 2];
 
-                for (int i = ith; i < mel.nLen; i += nThreads) {
+                for (int i = ith; i < activeFrames; i += workerCount) {
 /////////////// END of Block ///////////////////////////////////////////////////////////////////////
 
 /////////////// COMMENT below block to use multithreaded mel calculation ///////////////////////////
@@ -264,15 +277,50 @@ public class WhisperUtil {
         return mel.data;
     }
 
+    // Twiddle factors by transform size. Each entry is computed with exactly the same expression
+    // the loops used to evaluate inline, so results are bit-identical; only the trig calls are saved.
+    private static final Map<Integer, double[][]> DFT_TWIDDLES = new ConcurrentHashMap<>();
+    private static final Map<Integer, float[][]> FFT_TWIDDLES = new ConcurrentHashMap<>();
+
+    private static double[][] dftTwiddles(int inSize) {
+        return DFT_TWIDDLES.computeIfAbsent(inSize, n -> {
+            double[] cosTable = new double[n * n];
+            double[] sinTable = new double[n * n];
+            for (int k = 0; k < n; k++) {
+                for (int i = 0; i < n; i++) {
+                    float angle = (float) (2 * Math.PI * k * i / n);
+                    cosTable[k * n + i] = cos(angle);
+                    sinTable[k * n + i] = sin(angle);
+                }
+            }
+            return new double[][]{cosTable, sinTable};
+        });
+    }
+
+    private static float[][] fftTwiddles(int inSize) {
+        return FFT_TWIDDLES.computeIfAbsent(inSize, n -> {
+            float[] reTable = new float[n / 2];
+            float[] imTable = new float[n / 2];
+            for (int k = 0; k < n / 2; k++) {
+                float theta = (float) (2 * Math.PI * k / n);
+                reTable[k] = (float) cos(theta);
+                imTable[k] = (float) -sin(theta);
+            }
+            return new float[][]{reTable, imTable};
+        });
+    }
+
     private void dft(float[] input, float[] output) {
         int inSize = input.length;
+        double[][] twiddles = dftTwiddles(inSize);
+        double[] cosTable = twiddles[0];
+        double[] sinTable = twiddles[1];
         for (int k = 0; k < inSize; k++) {
             float re = 0.0f;
             float im = 0.0f;
             for (int n = 0; n < inSize; n++) {
-                float angle = (float) (2 * Math.PI * k * n / inSize);
-                re += input[n] * cos(angle);
-                im -= input[n] * sin(angle);
+                re += input[n] * cosTable[k * inSize + n];
+                im -= input[n] * sinTable[k * inSize + n];
             }
             output[k * 2 + 0] = re;
             output[k * 2 + 1] = im;
@@ -312,10 +360,10 @@ public class WhisperUtil {
 
         fft(even, evenFft);
         fft(odd, oddFft);
+        float[][] twiddles = fftTwiddles(inSize);
         for (int k = 0; k < inSize / 2; k++) {
-            float theta = (float) (2 * Math.PI * k / inSize);
-            float re = (float) cos(theta);
-            float im = (float) -sin(theta);
+            float re = twiddles[0][k];
+            float im = twiddles[1][k];
             float reOdd = oddFft[2 * k + 0];
             float imOdd = oddFft[2 * k + 1];
             output[2 * k + 0] = evenFft[2 * k + 0] + re * reOdd - im * imOdd;
