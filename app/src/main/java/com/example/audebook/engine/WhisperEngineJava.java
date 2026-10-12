@@ -85,6 +85,8 @@ public class WhisperEngineJava implements WhisperEngine {
             mInterpreter = null; // Optional: Set to null to avoid accidental reuse
         }
         mModelBuffer = null;
+        // So a transcription queued after this skips instead of using the closed interpreter
+        mIsInitialized = false;
     }
 
     @Override

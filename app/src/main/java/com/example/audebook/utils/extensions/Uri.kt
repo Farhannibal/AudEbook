@@ -8,6 +8,7 @@ package com.example.audebook.utils.extensions
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.MediaStore
 import java.io.File
@@ -50,6 +51,20 @@ private fun Uri.extension(context: Context): String? {
     }
 
     return path?.let { File(it).extension }
+}
+
+/**
+ * Keeps access to a document picked with OpenDocument across restarts. Read access is what
+ * opening and transcribing need; write is kept as well when the provider granted it (Readium
+ * can write an LCP license into a publication), otherwise read only.
+ */
+fun ContentResolver.persistDocumentAccess(uri: Uri) {
+    val read = Intent.FLAG_GRANT_READ_URI_PERMISSION
+    try {
+        takePersistableUriPermission(uri, read or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    } catch (e: SecurityException) {
+        takePersistableUriPermission(uri, read)
+    }
 }
 
 private fun ContentResolver.queryProjection(uri: Uri, projection: String): String? =

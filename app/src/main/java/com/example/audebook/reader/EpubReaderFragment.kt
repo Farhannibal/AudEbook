@@ -99,6 +99,7 @@ import kotlin.time.DurationUnit
 import com.example.audebook.utils.AudioSegmentExtractor
 import com.example.audebook.utils.TranscriptMatcher
 import com.example.audebook.utils.TranscriptionPacing
+import com.example.audebook.utils.extensions.persistDocumentAccess
 import com.example.audebook.domain.Bookshelf
 //import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationRetriever
@@ -245,8 +246,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         sharedStoragePickerLauncher =
             registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
                 uri?.let {
-                    val takeFlags: Int = Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    requireContext().contentResolver.takePersistableUriPermission(uri, takeFlags)
+                    requireContext().contentResolver.persistDocumentAccess(uri)
                     addPublicationFromStorage(it.toUrl()!! as AbsoluteUrl)
                 }
             }
@@ -630,6 +630,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             CoroutineScope(Dispatchers.IO).launch { extractor.close() }
         }
         audioSegmentExtractor = null
+        // Each reader creates its own Whisper; free its model and stop its threads, after any
+        // slot still being transcribed (so also off the main thread)
+        mWhisper?.let { whisper ->
+            CoroutineScope(Dispatchers.IO).launch { whisper.release() }
+        }
+        mWhisper = null
         super.onDestroy()
     }
 

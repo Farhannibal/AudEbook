@@ -566,6 +566,12 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
             CoroutineScope(Dispatchers.IO).launch { extractor.close() }
         }
         audioSegmentExtractor = null
+        // Each reader creates its own Whisper; free its model and stop its threads, after any
+        // slot still being transcribed (so also off the main thread)
+        mWhisper?.let { whisper ->
+            CoroutineScope(Dispatchers.IO).launch { whisper.release() }
+        }
+        mWhisper = null
         super.onDestroy()
     }
 }

@@ -38,6 +38,8 @@ public class Whisper {
     private final Queue<float[]> audioBufferQueue = new LinkedList<>();
 
     private final WhisperEngine mWhisperEngine;
+    private final Thread mFileThread;
+    private final Thread mBufferThread;
     private Action mAction;
     private String mWavFilePath;
     private WhisperListener mUpdateListener;
@@ -54,12 +56,24 @@ public class Whisper {
 //        this.mWhisperEngine = new WhisperEngineNative(context);
 
         // Start thread for file transcription for file transcription
-        Thread threadTranscbFile = new Thread(this::transcribeFileLoop);
-        threadTranscbFile.start();
+        mFileThread = new Thread(this::transcribeFileLoop);
+        mFileThread.start();
 
         // Start thread for buffer transcription for live mic feed transcription
-        Thread threadTranscbBuffer = new Thread(this::transcribeBufferLoop);
-        threadTranscbBuffer.start();
+        mBufferThread = new Thread(this::transcribeBufferLoop);
+        mBufferThread.start();
+    }
+
+    /**
+     * Stops both worker threads and frees the model. Waits for a transcription in progress to
+     * finish first, so call this off the main thread. The instance can't be used afterwards.
+     */
+    public void release() {
+        mFileThread.interrupt();
+        mBufferThread.interrupt();
+        synchronized (mWhisperEngine) {
+            mWhisperEngine.deinitialize();
+        }
     }
 
     public void setListener(WhisperListener listener) {

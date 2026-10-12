@@ -34,6 +34,7 @@ import com.example.audebook.data.model.Book
 import com.example.audebook.databinding.FragmentBookshelfBinding
 import com.example.audebook.opds.GridAutoFitLayoutManager
 import com.example.audebook.reader.ReaderActivityContract
+import com.example.audebook.utils.extensions.persistDocumentAccess
 import com.example.audebook.utils.viewLifecycle
 import timber.log.Timber
 
@@ -95,8 +96,7 @@ class BookshelfFragment : Fragment() {
         sharedStoragePickerLauncher =
             registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
                 uri?.let {
-                    val takeFlags: Int = Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    requireContext().contentResolver.takePersistableUriPermission(uri, takeFlags)
+                    requireContext().contentResolver.persistDocumentAccess(uri)
                     bookshelfViewModel.addPublicationFromStorage(it)
                 }
             }
