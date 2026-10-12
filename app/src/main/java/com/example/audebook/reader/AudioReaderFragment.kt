@@ -27,6 +27,7 @@ import androidx.lifecycle.viewModelScope
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.launchIn
@@ -91,6 +92,10 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
     private var startTime: Long = 0
 
     private var mWhisper: Whisper? = null
+
+    // Opened on first transcription, closed in onDestroy
+    @Volatile
+    private var audioSegmentExtractor: AudioSegmentExtractor? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -353,11 +358,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
                     Timber.d(navigator.readingOrder.items[0].toString())
 
 //                    val inputFilePath = "data/user/0/com.example.audebook/files/b901dd88-80c9-44b6-94fc-46bd4d609a96.m4a"
-                    val inputFilePath =
-                        getFilePathFromContentUri(requireContext(),Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString())).toString()
-                    val inputFileType = inputFilePath.substringAfterLast('.', "")
-                    val outputFilePath =
-                        sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
+                    val outputFilePath = sdcardDataFolder.absolutePath + "/extracted_segment"
                     val timestamp = binding.timelinePosition.text.toString()
                     val duration = 15
 
@@ -369,7 +370,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
                         startTimeInSeconds % 60
                     )
 //d
-                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
+                    extractAudioSegment(outputFilePath, startTimeFormatted, duration)
 //d
 
 
@@ -456,12 +457,15 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 
 
     private suspend fun extractAudioSegment(
-        inputFilePath: String,
         outputFilePath: String,
         startTime: String,
         duration: Int
     ) {
         withContext(Dispatchers.IO) {
+            val extractor = audioSegmentExtractor ?: AudioSegmentExtractor.open(
+                requireContext().applicationContext,
+                Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString())
+            ).also { audioSegmentExtractor = it }
 //            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i $inputFilePath  -t $duration -c copy $outputFilePath"
 //            Timber.d(command)
 //            FFmpegKit.execute(command)
@@ -472,8 +476,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 //                FFmpegKit.execute(convertCommand)
 //            }
 
-            AudioSegmentExtractor.extractToWav(
-                inputFilePath,
+            extractor.extractToWav(
                 "$outputFilePath.wav",
                 convertTimestampToSeconds(startTime),
                 duration
@@ -530,11 +533,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 
 //                    val inputFilePath =
 //                        publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString()
-                    val inputFilePath =
-                        getFilePathFromContentUri(requireContext(),Uri.parse(publication.get(publication.readingOrder[0].url())!!.sourceUrl.toString())).toString()
-                    val inputFileType = inputFilePath.substringAfterLast('.', "")
-                    val outputFilePath =
-                        sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
+                    val outputFilePath = sdcardDataFolder.absolutePath + "/extracted_segment"
                     val timestamp = binding.timelinePosition.text.toString()
                     val duration = 15
 
@@ -546,7 +545,7 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
                         startTimeInSeconds % 60
                     )
 
-                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
+                    extractAudioSegment(outputFilePath, startTimeFormatted, duration)
 
                     mWhisper?.apply {
                         setFilePath(outputFilePath + ".wav")
@@ -561,40 +560,12 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
         }
     }
 
-    fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
-        var filePath: String? = null
-        val fileName = getFileName(context, contentUri)
-        if (fileName != null) {
-            val file = File(context.filesDir, fileName)
-            filePath = file.absolutePath
-            saveFileFromUri(context, contentUri, file)
+    override fun onDestroy() {
+        // close() waits for an in-flight extraction, so keep it off the main thread
+        audioSegmentExtractor?.let { extractor ->
+            CoroutineScope(Dispatchers.IO).launch { extractor.close() }
         }
-        return filePath
-    }
-
-    private fun getFileName(context: Context, uri: Uri): String? {
-        var fileName: String? = null
-        val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                fileName = it.getString(it.getColumnIndex(OpenableColumns.DISPLAY_NAME))
-            }
-        }
-        return fileName
-    }
-
-    private fun saveFileFromUri(context: Context, uri: Uri, file: File) {
-        val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
-        val outputStream: FileOutputStream = FileOutputStream(file)
-        inputStream?.use { input ->
-            outputStream.use { output ->
-                val buffer = ByteArray(1024)
-                var length: Int
-                while (input.read(buffer).also { length = it } > 0) {
-                    output.write(buffer, 0, length)
-                }
-                output.flush()
-            }
-        }
+        audioSegmentExtractor = null
+        super.onDestroy()
     }
 }

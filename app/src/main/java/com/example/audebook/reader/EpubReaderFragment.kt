@@ -200,7 +200,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     lateinit var scrollSpeedDialog: TtsPreferencesBottomSheetDialogFragment
 
-    lateinit var inputFilePath: String
+    // Reads the audiobook in place; opened in loadAudiobookNavigator, closed in onDestroy
+    private var audioSegmentExtractor: AudioSegmentExtractor? = null
+    private var isExtractingSegment = false
 
     var currentHighlight: List<Locator> = listOf<Locator>()
 
@@ -597,6 +599,15 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
 
         applyDecorations(decorations, "pageNumbers")
+    }
+
+    override fun onDestroy() {
+        // close() waits for an in-flight extraction, so keep it off the main thread
+        audioSegmentExtractor?.let { extractor ->
+            CoroutineScope(Dispatchers.IO).launch { extractor.close() }
+        }
+        audioSegmentExtractor = null
+        super.onDestroy()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -1316,7 +1327,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     currentTranscribeSegment = transcriptionTimestamp
 
 //                Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
-                if (sdcardDataFolder != null && !transcriptionMap.containsKey(transcriptionTimestamp) && currentTranscribeSegment == transcriptionTimestamp) {
+                if (sdcardDataFolder != null && !isExtractingSegment && !transcriptionMap.containsKey(transcriptionTimestamp) && currentTranscribeSegment == transcriptionTimestamp) {
 //                    Timber.d(audioNavigator.readingOrder.items[0].toString())
 //                    startTimeGetContent = System.currentTimeMillis()
 //
@@ -1331,9 +1342,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
 //                    startTimeGetContent = System.currentTimeMillis()
 //                    Timber.d("Transcription for val inputFileType = inputFilePath.substringAfterLast(")
-                    val inputFileType = inputFilePath.substringAfterLast('.', "")
-                    val outputFilePath =
-                        sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
+                    val outputFilePath = sdcardDataFolder.absolutePath + "/extracted_segment"
                     val timestamp = withContext(Dispatchers.Main) {
                         binding.timelinePosition.text.toString()
                     }
@@ -1356,7 +1365,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
 //                    startTimeGetContent = System.currentTimeMillis()
 //                    Timber.d("Transcription for extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration) ")
-                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
+                    if (!extractAudioSegment(outputFilePath, startTimeFormatted, duration)) return
 
 //                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
 //                    startTimeGetContent = System.currentTimeMillis()
@@ -1446,19 +1455,25 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        }
 //    }
 
-    private fun extractAudioSegment(
-        inputFilePath: String,
+    /** Writes the clip to "$outputFilePath.wav" off the main thread. Returns false if nothing was written. */
+    private suspend fun extractAudioSegment(
         outputFilePath: String,
         startTime: String,
         duration: Int
-    ) {
-        // Callers always read "$outputFilePath.wav", so write there even when the input is a .wav
-        AudioSegmentExtractor.extractToWav(
-            inputFilePath,
-            "$outputFilePath.wav",
-            convertTimestampToSeconds(startTime),
-            duration
-        )
+    ): Boolean {
+        val extractor = audioSegmentExtractor ?: return false
+        isExtractingSegment = true
+        try {
+            return withContext(Dispatchers.IO) {
+                extractor.extractToWav(
+                    "$outputFilePath.wav",
+                    convertTimestampToSeconds(startTime),
+                    duration
+                )
+            }
+        } finally {
+            isExtractingSegment = false
+        }
     }
 
     private fun convertTimestampToSeconds(timestamp: String): Int {
@@ -1620,12 +1635,19 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         // LOAD TRANSCRIPT
 
 
-        inputFilePath = withContext(Dispatchers.IO) {
-            getFilePathFromContentUri(
-                requireContext(),
-                Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
-            )
-        }.toString()
+        val audioUri =
+            Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
+        val appContext = requireContext().applicationContext
+        val previousExtractor = audioSegmentExtractor
+        audioSegmentExtractor = withContext(Dispatchers.IO) {
+            previousExtractor?.close()
+            try {
+                AudioSegmentExtractor.open(appContext, audioUri)
+            } catch (e: Exception) {
+                Timber.e(e, "Cannot open audiobook for transcription: $audioUri")
+                null
+            }
+        }
 
 
     }
@@ -2032,71 +2054,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             )
 
             CachedWebView = findAllWebViews(requireView())
-        }
-    }
-
-    suspend fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
-        return withContext(Dispatchers.IO) {
-            var filePath: String? = null
-            val fileName = getFileName(context, contentUri)
-            if (fileName != null) {
-                val file = File(context.filesDir, fileName)
-                filePath = file.absolutePath
-                saveFileFromUri(context, contentUri, file)
-            }
-            filePath
-        }
-    }
-
-    suspend fun getMultipleFilePathFromContentUri(context: Context, contentUri: Uri): String? {
-        return withContext(Dispatchers.IO) {
-            var filePath: String? = null
-            val fileName = getFileName(context, contentUri)
-            if (fileName != null) {
-                val file = File(context.filesDir, fileName)
-                filePath = file.absolutePath
-                saveFileFromUri(context, contentUri, file)
-            }
-            filePath
-        }
-    }
-
-//    fun getFilePathFromContentUri(context: Context, contentUri: Uri): String? {
-//        var filePath: String? = null
-//        val fileName = getFileName(context, contentUri)
-//        if (fileName != null) {
-//            val file = File(context.filesDir, fileName)
-//            filePath = file.absolutePath
-//            saveFileFromUri(context, contentUri, file)
-//        }
-//        return filePath
-//    }
-
-    @SuppressLint("Range")
-    private fun getFileName(context: Context, uri: Uri): String? {
-        var fileName: String? = null
-        val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                fileName = it.getString(it.getColumnIndex(OpenableColumns.DISPLAY_NAME))
-
-            }
-        }
-        return fileName
-    }
-
-    private fun saveFileFromUri(context: Context, uri: Uri, file: File) {
-        val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
-        val outputStream: FileOutputStream = FileOutputStream(file)
-        inputStream?.use { input ->
-            outputStream.use { output ->
-                val buffer = ByteArray(1024)
-                var length: Int
-                while (input.read(buffer).also { length = it } > 0) {
-                    output.write(buffer, 0, length)
-                }
-                output.flush()
-            }
         }
     }
 
