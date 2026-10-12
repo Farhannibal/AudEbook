@@ -95,13 +95,11 @@ import org.readium.r2.shared.util.getOrElse
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
 
-
 import com.example.audebook.utils.AudioSegmentExtractor
 import com.example.audebook.utils.TranscriptMatcher
 import com.example.audebook.utils.TranscriptionPacing
 import com.example.audebook.utils.extensions.persistDocumentAccess
 import com.example.audebook.domain.Bookshelf
-//import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationRetriever
 import com.example.audebook.reader.preferences.AudioPreferencesBottomSheetDialogFragment
 import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
@@ -138,7 +136,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import org.readium.navigator.media.tts.android.AndroidTtsPreferences
 
-
 @OptIn(ExperimentalReadiumApi::class)
 class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListener {
 
@@ -146,7 +143,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private lateinit var readium: Readium
 
-    //    lateinit var audioNavigator: TimeBasedMediaNavigator<*, *, *>
     lateinit var audioNavigator: AudioNavigator<*, *>
     lateinit var audioPublication: Publication
 
@@ -159,13 +155,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private lateinit var locators: MutableList<Locator>
 
-
     private lateinit var application: Application
-
-//    private lateinit var navigatorPreferences: DataStore<Preferences>
-
-//    private val Context.navigatorPreferences: DataStore<Preferences>
-//            by preferencesDataStore(name = "navigator-preferences")
 
     private var seekingItem: Int? = null
 
@@ -232,14 +222,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     lateinit var CachedWebView: List<WebView>
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState != null) {
             isSearchViewIconified = savedInstanceState.getBoolean(IS_SEARCH_VIEW_ICONIFIED)
         }
 
         application = requireActivity().application as Application
-//        navigatorPreferences = application.navigatorPreferences
         readium = application.readium
 
         // Register for activity result here
@@ -256,10 +244,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 val sdcardDataFolder = ctx.getExternalFilesDir(null)
                 if (sdcardDataFolder != null) {
                     copyAssetsToSdcard(ctx, sdcardDataFolder, EXTENSIONS_TO_COPY)
-//                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-base.en.tflite")
-//                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-tiny.en.tflite")
                     val selectedTfliteFile = File(sdcardDataFolder, "whisper-tiny-en.tflite")
-//                    val selectedTfliteFile = File(sdcardDataFolder, "Whisper-Tiny-En_WhisperEncoderInf.tflite")
                     val vocabFile = File(sdcardDataFolder, "filters_vocab_en.bin")
 
                     withContext(Dispatchers.Main) {
@@ -273,21 +258,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                                     when (message) {
                                         Whisper.MSG_PROCESSING -> {
-//                                    handler.post { binding.tvStatus.text = message }
-//                                    handler.post { binding.tvResult.text = "" }
                                             startTime = System.currentTimeMillis()
                                         }
 
                                         Whisper.MSG_PROCESSING_DONE -> {
-                                            // handler.post { binding.tvStatus.text = message }
-                                            // for testing
-//                                    if (loopTesting) {
-//                                        transcriptionSync.sendSignal()
-//                                    }
                                         }
 
                                         Whisper.MSG_FILE_NOT_FOUND -> {
-//                                    handler.post { binding.tvStatus.text = message }
                                             Timber.d("File not found error...!")
                                         }
                                     }
@@ -296,10 +273,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                 override fun onResultReceived(result: String) {
                                     val cachedCurrentTranscribeSegment = currentTranscribeSegment
                                     val timeTaken = System.currentTimeMillis() - startTime
-//                            handler.post { binding.tvStatus.text = "Processing done in ${timeTaken}ms" }
 
                                     lifecycleScope.launch(Dispatchers.Main) {
-//                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
                                         transcriptionMap[cachedCurrentTranscribeSegment] = result
                                         recordSlotTime(timeTaken)
                                         // Start the next slot now instead of on the next playback
@@ -322,18 +297,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                             cachedCurrentTranscribeSegment
                                         )
 
-//                                        if (isLoadingInitTranscription && (transcriptionMap.count() <=2)){
-//                                            transcribeAudio(getNext15SecondInterval(currentTranscribeSegment, 1))
-//                                        }else{
-//                                            loadThenPlayEnd()
-//                                        }
                                     }
-
-
 
                                     Timber.d("Result: $result")
                                     Timber.d("timeTaken: $timeTaken ms")
-//                            handler.post { binding.tvResult.append(result) }
                                 }
                             })
 
@@ -345,11 +312,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         }
 
-
-
-
         locators = mutableListOf()
-//        locatorMap = mutableMapOf()
 
         val readerData = model.readerInitData as? EpubReaderInitData ?: run {
             // We provide a dummy fragment factory  if the ReaderActivity is restored after the
@@ -391,7 +354,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     transcriptFlow.collect { transcriptList ->
                         transcriptList.forEach { transcript ->
                             // Do something with each AudioBookTranscript
-//                    Timber.d("Transcription for transcript load" + transcript)
                             try {
                                 transcriptTimestamp = transcript.timestamp.toString()
                                 transcriptionMap[transcriptTimestamp] =
@@ -410,11 +372,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 // Handle the exception, e.g., show an error message to the user
             }
         }
-
-
-
-
-
 
         childFragmentManager.fragmentFactory =
             readerData.navigatorFactory.createFragmentFactory(
@@ -457,8 +414,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 }
             )
 
-
-
         childFragmentManager.setFragmentResultListener(
             SearchFragment::class.java.name,
             this,
@@ -474,10 +429,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 }
             }
         )
-
-
-
-
 
         super.onCreate(savedInstanceState)
     }
@@ -502,9 +453,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         navigator =
             childFragmentManager.findFragmentByTag(NAVIGATOR_FRAGMENT_TAG) as EpubNavigatorFragment
 
-
-//        navigator.currentLocator.value
-
         return view
     }
 
@@ -518,7 +466,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         binding.skipBackward.setOnClickListener(this::onSkipBackward)
 
         binding.transcribe.setOnClickListener(this::onReanchorTranscriptionLocator)
-//        binding.transcribe.setOnClickListener(this::onExtractAndTranscribe)
         binding.loadAudioBook.setOnClickListener(this::onLoadAudioBook)
         binding.setSpeed.setOnClickListener(this::onSetSpeed)
         binding.setScrollSpeed.setOnClickListener(this::onSetScrollSpeed)
@@ -542,7 +489,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
-
         val loadingIcon = view.findViewById<ImageView>(R.id.imageView3)
         val drawable = loadingIcon.drawable
         if (drawable is AnimatedVectorDrawable) {
@@ -561,7 +507,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                     menuDebug = menu.findItem(R.id.debugButton).apply {
                         isVisible = true
-//                        menuSearchView = actionView as SearchView
                     }
 
                     connectSearch()
@@ -598,7 +543,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     private suspend fun testFunc() {
-
 
     }
 
@@ -752,7 +696,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         initialLocator: Locator?
     ): Try<AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>, OpeningError> {
 
-
         val preferencesManager =
             ExoPlayerPreferencesManagerFactory(application.readerRepository.preferencesDataStoreRepo)
                 .createPreferenceManager(bookId)
@@ -766,7 +709,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 DebugError("Cannot create audio navigator factory.")
             )
         )
-
 
         val navigator = navigatorFactory.createNavigator(
             initialLocator,
@@ -791,11 +733,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             navigatorFactory
         )
 
-
         val preferencesModel = UserPreferencesViewModel(model.viewModelScope, initData)
-//        val nav = (navigator as? Configurable<ExoPlayerSettings, ExoPlayerPreferences>)
-////        model.s
-//        preferencesModel?.bind(nav,viewLifecycleOwner)
 
         @Suppress("Unchecked_cast")
         (navigator as? Configurable<ExoPlayerSettings, ExoPlayerPreferences>)
@@ -805,16 +743,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     .bind(navigator, viewLifecycleOwner)
             }
 
-//        if (preferencesModel != null) {
         audioDialog = AudioPreferencesBottomSheetDialogFragment()
         audioDialog.setAudioPreferencesModelFunc(preferencesModel!!)
-//            Timber.d(AudioPreferencesBottomSheetDialogFragment().audioPreferencesModel.toString())
-//        }
 
         scrollSpeedDialog = TtsPreferencesBottomSheetDialogFragment()
-
-//        scrollSpeedDialog.show(childFragmentManager, "TtsSettings")
-//        scrollSpeedDialog.dismiss()
 
         return Try.success(navigator)
     }
@@ -846,7 +778,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             return
         }
 
-
         binding.playPause.isEnabled = true
         binding.timelineBar.isEnabled = true
         binding.timelineDuration.isEnabled = true
@@ -859,23 +790,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         )
 
-//        if (playback.playWhenReady) {
-//            updateControlsLayoutBackground(true)
-//        } else {
-//            updateControlsLayoutBackground(false)
-//        }
         if (seekingItem == null) {
             updateTimeline(playback)
         }
 
-
         val playbackTranscribeSegment =
             roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
-//        binding.transcriptionResult.text = if (transcriptionMap.containsKey(playbackTranscribeSegment)) {
-//            transcriptionMap[playbackTranscribeSegment]
-//        } else {
-//            binding.transcriptionResult.text
-//        }
         val currentTime = System.currentTimeMillis()
 
         if (currentTime - lastHighlightUpdate >= 500) {
@@ -914,23 +834,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     }
                 }
             } else if (locatorMap.any()) {
-//                model.viewModelScope.launch {
-//                    if (!locators.isEmpty())
-//                        loadThenPlayStart(listOf(playbackTranscribeSegment
-//                            ,getNext15SecondInterval(playbackTranscribeSegment, 1)
-//                            ,getNext15SecondInterval(playbackTranscribeSegment, 2)))
-//                }
-//                if (latestPlaybackStatus.playWhenReady) {
-//                    if (transcriptionMap.containsKey(playbackTranscribeSegment)) {
-//                        model.viewModelScope.launch {
-//                            locatorMap[playbackTranscribeSegment] =
-//                                syncTranscriptionWithLocator(
-//                                    transcriptionMap[playbackTranscribeSegment].toString(),
-//                                    playbackTranscribeSegment
-//                                )
-//                        }
-//                    }
-//                }
                 model.viewModelScope.launch {
                     forceLocatorSync(playbackTranscribeSegment)
                 }
@@ -938,8 +841,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 Timber.d("Transcription for no LocatorMap found")
             }
         }
-
-
 
         if (currentTime - lastSaveTime >= 1000) { // 5 seconds
             lastSaveTime = currentTime
@@ -951,11 +852,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                 getNextTranscriptionSegment()
 
-//                val settings = (audioNavigator.settings.value as ExoPlayerSettings)
-//                val settingsSpeed = settings.speed
                 val settingsSpeed =
                     (audioDialog.audioPreferencesModel.editor.value.preferences as ExoPlayerPreferences).speed
-//                Timber.d("Transcription for settingsSpeed: $settingsSpeed")
 
                 val roundedSpeed = if (settingsSpeed == null) {
                     1.0
@@ -1012,10 +910,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                 var scrollspeed: Double? = null
                 try {
-//                    if(scrollSpeedDialog.isAdded) {
                     scrollspeed =
                         (scrollSpeedDialog.preferencesModel.editor.value.preferences as AndroidTtsPreferences).speed
-//                    }
                 } catch (e: Exception) {
                     Timber.d("Transcription for scrollSpeedDialog: $e")
                 }
@@ -1073,28 +969,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 // Set the image of the setSpeed button
                 binding.setScrollSpeed.setImageResource(scrollSpeedDrawable)
 
-//                var currentSegment = getPlaybackTranscribeSegment()
-//                var iterations = 1
-//
-//                while (iterations <= 12) {
-//                    if (transcriptionMap.containsKey(currentSegment)) {
-//                        // The map contains the key
-//                        val transcription = transcriptionMap[currentSegment]
-//                        Timber.d("Transcription for $currentSegment: $transcription")
-//
-//                    } else {
-//                        // The map does not contain the key
-//                        Timber.d("No transcription found for $currentSegment")
-//                        if (playback.playWhenReady == true) {
-//                            transcribeAudio(currentSegment)
-//                        }
-//                        break
-//                    }
-//                    currentSegment = getNext15SecondInterval(playbackTranscribeSegment, iterations)
-//                    iterations++
-//                }
-
-
             }
         }
 
@@ -1110,13 +984,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
-//        model.viewModelScope.launch {
-//            val currentAudioPosition = audioNavigator.currentLocator.value
-//            val currentEPubPosition = navigator.currentLocator.value
-//
-//            Timber.d("Transcription for currentAudioPosition: " + currentAudioPosition.toString())
-//            Timber.d("Transcription for currentEPubPosition: " + currentEPubPosition.toString())
-//        }
     }
 
     /**
@@ -1251,7 +1118,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         updateControlsLayoutBackground(false)
                     } else {
                         if (transcriptionMap.isEmpty()) {
-//                            loadThenPlayStart(generateTranscriptionRanges(roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())))
                         }
                         audioNavigator.play()
                         updateControlsLayoutBackground(true)
@@ -1303,13 +1169,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-//    override fun go(locator: Locator, animated: Boolean) {
-//        model.viewModelScope.launch {
-//            audioNavigator.go(locator)
-//            audioNavigator.play()
-//        }
-//    }
-
     @Suppress("UNUSED_PARAMETER")
     private fun forbidUserSeeking(view: View, event: MotionEvent): Boolean {
         // Check if audioNavigator is initialized
@@ -1321,7 +1180,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private fun onReaderTouched(view: View, event: MotionEvent): Boolean {
         // Check if audioNavigator is initialized
-//        Timber.d("Transcription for onReaderTouched ${event}")
         if (autoScrollTempPauseFlag == false) {
             viewLifecycleOwner.lifecycleScope.launch {
                 autoScrollTempPauseFlag = true
@@ -1332,45 +1190,19 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return false
     }
 
-
     private fun onLoadAudioBook(@Suppress("UNUSED_PARAMETER") view: View) {
         model.viewModelScope.launch {
-//            audioNavigator.skipBackward()
             Timber.d("Load Audio Book")
 
             sharedStoragePickerLauncher.launch(arrayOf("*/*"))
 
-//            try {
-//                loadAudiobookNavigator(epubBookId)
-//            } catch (e: Exception) {
-//                Timber.e(e, "Failed to load audiobook navigator")
-//                // Handle the exception, e.g., show an error message to the user
-//            }
         }
     }
 
     private fun onSetSpeed(@Suppress("UNUSED_PARAMETER") view: View) {
         model.viewModelScope.launch {
 
-//        @Suppress("Unchecked_cast")
-//        (model.settings as UserPreferencesViewModel<ExoPlayerSettings, ExoPlayerPreferences>)
-//            .bind(audioNavigator, viewLifecycleOwner)
-
-//        @Suppress("Unchecked_cast")
-//        (audioNavigator as? Configurable<ExoPlayerSettings, ExoPlayerPreferences>)
-//            ?.let { navigator ->
-//                @Suppress("Unchecked_cast")
-//                (model.settings as UserPreferencesViewModel<ExoPlayerSettings, ExoPlayerPreferences>)
-//                    .bind(navigator, viewLifecycleOwner)
-//            }
-
-
-//            audioNavigator.skipForward()
-
-//            MainPreferencesBottomSheetDialogFragment().con
             audioDialog.show(childFragmentManager, "Settings")
-//            MainPreferencesBottomSheetDialogFragment()
-//                .show(childFragmentManager, "Settings")
         }
     }
 
@@ -1431,8 +1263,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     transcriptionTimestamp
                 )
             ) {
-//                var startTimeGetContent = System.currentTimeMillis()
-//                Timber.d("Transcription for val sdcardDataFolder = withContext(Dispatchers.IO) {")
 
                 val sdcardDataFolder = withContext(Dispatchers.IO) {
                     context?.getExternalFilesDir(null)
@@ -1443,29 +1273,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 if (transcriptionMap.containsKey(currentTranscribeSegment))
                     currentTranscribeSegment = transcriptionTimestamp
 
-//                Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
                 if (sdcardDataFolder != null && !isExtractingSegment && !transcriptionMap.containsKey(transcriptionTimestamp) && currentTranscribeSegment == transcriptionTimestamp) {
-//                    Timber.d(audioNavigator.readingOrder.items[0].toString())
-//                    startTimeGetContent = System.currentTimeMillis()
-//
-//                    Timber.d("Transcription for val inputFilePath = withContext(Dispatchers.IO) {")
-//                    val inputFilePath = withContext(Dispatchers.IO) {
-//                        getFilePathFromContentUri(
-//                            requireContext(),
-//                            Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
-//                        )
-//                    }.toString()
 
-//                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
-//                    startTimeGetContent = System.currentTimeMillis()
-//                    Timber.d("Transcription for val inputFileType = inputFilePath.substringAfterLast(")
                     val timestamp = withContext(Dispatchers.Main) {
                         binding.timelinePosition.text.toString()
                     }
                     val duration = segmentLength
-
-//                    currentTranscribeSegment = transcriptionTimestamp
-//                    transcriptionRange = generateTranscriptionRanges(currentTranscribeSegment)
 
                     val startTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
                     val startTimeFormatted = String.format(
@@ -1477,10 +1290,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                     Timber.d(timestamp)
 
-
-//                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
-//                    startTimeGetContent = System.currentTimeMillis()
-//                    Timber.d("Transcription for extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration) ")
                     val wavPath = if (prefetchedSegment == currentTranscribeSegment && prefetchedWavPath != null) {
                         // Already cut while Whisper was busy with the previous slot
                         prefetchedWavPath!!.also {
@@ -1493,9 +1302,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         "$outputFilePath.wav"
                     }
 
-//                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
-//                    startTimeGetContent = System.currentTimeMillis()
-//                    Timber.d("Transcription for mWhisper?.apply {")
                     whisperWavPath = wavPath
                     mWhisper?.apply {
                         setFilePath(wavPath)
@@ -1503,16 +1309,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         setAction(Whisper.ACTION_TRANSCRIBE)
                         start()
                     }
-//                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
-//                    Timber.d("Transcription for: --------------------------------------------------")
                 } else {
                     Timber.d("Transcription for currentTranscribeSegment: Still Adding currentTranscribeSegment")
                     currentTranscribeSegment = transcriptionTimestamp
                 }
             } else {
                 Timber.d("Whisper is already in progress...!")
-//                Timber.d("Transcription for currentTranscribeSegment1: " + currentTranscribeSegment)
-//                Timber.d("Transcription for currentTranscribeSegment2: " + transcriptionTimestamp)
                 if (transcriptionMap.containsKey(currentTranscribeSegment)) {
                     mWhisper?.stop()
                     Timber.d("Transcription for currentTranscribeSegment: STOPPPPPP")
@@ -1573,65 +1375,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             ?: bases.first { "$it.wav" != inUse }
     }
 
-//    private suspend fun transcribeAudio(transcriptionTimestamp: String) {
-//        try {
-////        model.viewModelScope.launch {
-//            if (mWhisper?.isInProgress() == false) {
-//                val sdcardDataFolder = withContext(Dispatchers.IO) {
-//                    context?.getExternalFilesDir(null)
-//                }
-//
-//                if (sdcardDataFolder != null) {
-//
-//                    Timber.d(audioNavigator.readingOrder.items[0].toString())
-//
-//
-////                    val inputFilePath =
-////                        audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString()
-//                    val inputFilePath =
-//                        getFilePathFromContentUri(
-//                            requireContext(),
-//                            Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
-//                        ).toString()
-//                    val inputFileType = inputFilePath.substringAfterLast('.', "")
-//                    val outputFilePath =
-//                        sdcardDataFolder.absolutePath + "/extracted_segment." + inputFileType
-//                    val timestamp = withContext(Dispatchers.Main) {
-//                        binding.timelinePosition.text.toString()
-//                    }
-//                    val duration = 6
-//
-//                    currentTranscribeSegment = transcriptionTimestamp
-//                    transcriptionRange = generateTranscriptionRanges(currentTranscribeSegment)
-//
-//                    val startTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
-//                    val startTimeFormatted = String.format(
-//                        "%02d:%02d:%02d",
-//                        startTimeInSeconds / 3600,
-//                        (startTimeInSeconds % 3600) / 60,
-//                        startTimeInSeconds % 60
-//                    )
-//
-//                    Timber.d(timestamp)
-//
-//                    extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration)
-//
-//                    mWhisper?.apply {
-//                        setFilePath(outputFilePath + ".wav")
-//                        Timber.d(outputFilePath + ".wav")
-//                        setAction(Whisper.ACTION_TRANSCRIBE)
-//                        start()
-//                    }
-//                }
-//            } else {
-//                Timber.d("Whisper is already in progress...!")
-//            }
-////        }
-//        } catch (e: Exception) {
-//            Timber.e(e, "Error occurred while transcribing audio")
-//        }
-//    }
-
     /** Writes the clip to "$outputFilePath.wav" off the main thread. Returns false if nothing was written. */
     private suspend fun extractAudioSegment(
         outputFilePath: String,
@@ -1654,17 +1397,14 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     private fun convertTimestampToSeconds(timestamp: String): Int {
-//        var parts = timestamp.split(":").map { it.toInt() }
         var parts = timestamp.split(":").map { it.toInt() }.toMutableList()
         if (parts.size != 3) {
             if (parts.size == 2) {
-//            parts = "00:00:00".split(":").map { it.toInt() }
                 parts.add(0, 0)
             } else if (parts.size == 1) {
                 parts.add(0, 0)
                 parts.add(0, 0)
             } else {
-//            parts = "00:00:00".split(":").map { it.toInt() }.toMutableList()
                 parts = mutableListOf(0, 0, 0)
             }
         }
@@ -1672,20 +1412,15 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     private fun roundTimestampToNearest15Seconds(timestamp: String): String {
-//        var parts = timestamp.split(":").map { it.toInt() }
-//        if (parts.size != 3)
-//            parts = "00:00:00".split(":").map { it.toInt() }
 
         var parts = timestamp.split(":").map { it.toInt() }.toMutableList()
         if (parts.size != 3) {
             if (parts.size == 2) {
-//            parts = "00:00:00".split(":").map { it.toInt() }
                 parts.add(0, 0)
             } else if (parts.size == 1) {
                 parts.add(0, 0)
                 parts.add(0, 0)
             } else {
-//            parts = "00:00:00".split(":").map { it.toInt() }.toMutableList()
                 parts = mutableListOf(0, 0, 0)
             }
         }
@@ -1704,7 +1439,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val baseTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
         val ranges = mutableListOf<String>()
 
-//        for (i in -15..45 step 15) {
         for (i in 0..3 * segmentLength step segmentLength) {
             val newTimeInSeconds = baseTimeInSeconds + i
             val hours = newTimeInSeconds / 3600
@@ -1725,24 +1459,16 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val minutes = (newTimeInSeconds % 3600) / 60
         val seconds = newTimeInSeconds % 60
 
-//        Timber.d("Transcription for: "+ String.format("%02d:%02d:%02d", hours, minutes, seconds))
-
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
     }
 
     private suspend fun loadAudiobookNavigator(bookId: Long) {
-//        Timber.d("BookIdTest: " +bookIdTest.toString())
-//        val bookId = 1L
 
         val allaudiobooks = application.bookRepository.audiobooks()
         val allbooks = application.bookRepository.books()
         allaudiobooks.onEach {
             Timber.d(it.toString())
         }
-
-//        Timber.d("BookIdTest Total Number of Audiobooks: " +allbooks.count().toString())
-//        Timber.d("BookIdTest Total Number of Audiobooks: " +allaudiobooks.count().toString())
-//        Timber.d("BookIdTest Total Number of Audiobooks: " +allaudiobooks.count().toString())
 
         val book = checkNotNull(application.bookRepository.getAudiobook(bookId))
         val asset = readium.assetRetriever.retrieve(
@@ -1770,8 +1496,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val initialLocator = book.progression
             ?.let { Locator.fromJSON(JSONObject(it)) }
 
-//                                    val audioNavigator
-
         val readerInitData = when {
             (audioPublicationLoader as Publication).conformsTo(Publication.Profile.AUDIOBOOK) ->
                 openAudio(bookId, audioPublicationLoader, initialLocator)
@@ -1790,27 +1514,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         totalTimeOfAudio =
             audioNavigator.readingOrder.items[0].duration?.formatElapsedTime().toString()
 
-
-//                                    Timber.d(readerInitData.toString())
-//        audioNavigator.play()
         audioNavigator.playback
             .onEach { onPlaybackChanged(it) }
             .launchIn(viewLifecycleOwner.lifecycleScope)
 
-//        @Suppress("Unchecked_cast")
-//        (model.settings as UserPreferencesViewModel<EpubSettings, EpubPreferences>)
-//            .bind(audioNavigator, viewLifecycleOwner)
-
-
-//                @Suppress("Unchecked_cast")
-//                (model.settings as UserPreferencesViewModel<ExoPlayerSettings, ExoPlayerPreferences>)
-//                    .bind(audioNavigator, viewLifecycleOwner)
-
-
         binding.loadAudioBook.visibility = View.GONE
 
         // LOAD TRANSCRIPT
-
 
         val audioUri =
             Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
@@ -1828,7 +1538,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 null
             }
         }
-
 
     }
 
@@ -1874,15 +1583,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             asset,
             allowUserInteraction = false
         ).onSuccess { audioPublication ->
-//            val coverFile =
-//                coverStorage.storeCover(publication, coverUrl)
-//                    .getOrElse {
-//                        return Try.failure(
-//                            ImportError.FileSystem(
-//                                FileSystemError.IO(it)
-//                            )
-//                        )
-//                    }
 
             val id = application.bookRepository.insertAudioBook(
                 url,
@@ -1891,7 +1591,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 epubBookId
             )
             if (id == -1L) {
-//                coverFile.delete()
                 return Try.failure(
                     ImportError.Database(
                         DebugError("Could not insert book into database.")
@@ -1924,26 +1623,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     suspend fun getCurrentVisibleContentRange(full: Boolean = false) {
-//        model.viewModelScope.launch {
         // Display page number labels if the book contains a `page-list` navigation document.
-//            (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-//            navigator.applyDecorations(
-//                listOfNotNull(null),
-//                "tts"
-//            )
-
-
-//        val start = if (locators.isNotEmpty()) {
-//            locators[0]
-//
-//        } else {
-//            (navigator as? VisualNavigator)?.firstVisibleElementLocator()
-//        }
 
         val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
         val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
-
-
 
         if (!::globalIterator.isInitialized) {
             globalIterator =
@@ -1956,18 +1639,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
-//        val content = publication.content(start)
-//        val firstVisibleIndex = publication.content()?.elements()?.indexOfFirst { it.locator == start } as Int
-//        val content = publication.content(publication.content()?.elements()[firstVisibleIndex - 2]?.locator)
-
         val progressionRange = if (full) {
             -0.10..0.10
         } else {
             -0.03..0.03
         }
-
-//        val progressionRange = -0.03..0.03
-
 
         val tokenizer = DefaultTextContentTokenizer(
             unit = TextUnit.Word,
@@ -1975,43 +1651,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         )
 
         var i = 0
-
-//        val iterator = content?.iterator()
-//        locators.clear()
-//        var combinedRange: IntRange? = null
-
-
-////        while (iterator!!.hasNext() && i <= 15) {
-//        while (globalIterator.hasNext()) {
-//            try {
-//                val element = globalIterator.next()
-////            Timber.d("Transcription for unmerged: " + tokenizedContent.toString())
-////            Timber.d("Transcription for merged: " + mergeRanges(tokenizedContent).toString())
-//
-//
-//                Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
-//                Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
-//
-////            if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
-//                val progression = element.locator.locations.totalProgression
-//
-//                if (progression != null && currentAudioProgression != null) {
-//                    Timber.d("Transcription for: " + progression)
-//                    // Calculate the difference between locator progression and currentAudioProgression
-//                    val difference = progression - currentAudioProgression
-//
-//                    // Check if the difference is within 5% of currentAudioProgression
-//                    if (difference in progressionRange) {
-//                        // Execute the logic when the locator is within 5%
-//                        // Break out of the loop
-//                        break
-//                    }
-//                }
-//            }  catch (e: Exception) {
-//                Timber.d("Transcription for catching has next: " + i)
-//            }
-//
-//        }
 
         while (globalIterator.hasNext()) {
             try {
@@ -2040,26 +1679,16 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     val difference = progression - currentAudioProgression
 
                     // Check if the difference is within 5% of currentAudioProgression
-//                if (difference !in progressionRange) {
-//                    // Execute the logic when the locator is within 5%
-//                    // Break out of the loop
-//                    break
-//                }
                 }
 
             } catch (e: Exception) {
                 Timber.d("Transcription for catching has next: " + i)
             }
             i++
-//            }
         }
 
         Timber.d("Transcription for: " + locators.toString())
 
-//        }
-
-
-//        binding.audioOverlayText
     }
 
     private fun addLocator(element: Locator, string: String, range: IntRange) {
@@ -2138,50 +1767,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     fun onReanchorTranscriptionLocator(@Suppress("UNUSED_PARAMETER") view: View) {
-//        locators.clear()
-//        audioNavigator.play()
         audioNavigator.pause()
         locatorSyncingFlag = false
 
-//        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
-//        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
-//
-//
-//
-//        Timber.d("Transcription for currentEpubProgress: " + currentEpubProgress)
-//        Timber.d("Transcription for currentAudioProgression: " + currentAudioProgression)
-//
-//        if(currentEpubProgress!! - currentAudioProgression!! !in -0.03..0.03) {
-//
-//
-//            val iterator = publication.content()?.iterator()
-//
-//
-//            model.viewModelScope.launch {
-//                while (iterator!!.hasNext()) {
-//                    val locator = iterator.next().locator
-//                    val progression = locator.locations.totalProgression
-//                    if (progression != null) {
-////                Timber.d("Transcription for: " + locator.locations.progression)
-//                        // Calculate the difference between locator progression and currentAudioProgression
-//                        val difference = progression - currentAudioProgression
-//
-//                        // Check if the difference is within 5% of currentAudioProgression
-//                        if (difference in -0.01..0.01) {
-//                            // Execute the logic when the locator is within 5%
-//                            Timber.d("Transcription for Locator within 5% of currentAudioProgression: $locator")
-//                            navigator.go(locator)
-//                            // Break out of the loop
-//                            break
-//                        }
-//                    }
-//                }
-//            }
-//        }
-
         model.viewModelScope.launch {
             locators.clear()
-//            transcriptionMap.clear()
             locatorMap.clear()
             binding.loadingOverlay.visibility = View.VISIBLE
             val firstLocator = (navigator as? VisualNavigator)?.firstVisibleElementLocator()!!
@@ -2192,7 +1782,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             globalIterator = publication.content(firstLocator)!!.iterator()
 
             try {
-
 
                 if (globalIterator.hasPrevious())
                     globalIterator.previous().locator
@@ -2210,10 +1799,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
 
             // Iterate over transcriptionMap and update locatorMap
-//            transcriptionMap.forEach { (transcriptionTimestamp, result) ->
-//                locatorMap[transcriptionTimestamp] = syncTranscriptionWithLocator(result, transcriptionTimestamp)
-//                Timber.d("Transcription For Reanchor: $transcriptionTimestamp")
-//            }
 
             // Filter transcriptionMap to include only entries on or after currentTime
             transcriptionMap.filterKeys { it >= currentTime }
@@ -2222,8 +1807,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         syncTranscriptionWithLocator(result, transcriptionTimestamp)
                     Timber.d("Transcription For Reanchor: $transcriptionTimestamp")
                 }
-
-
 
             loadThenPlayStart(
                 generateTranscriptionRanges(
@@ -2252,10 +1835,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         animator.duration = 300 // Duration in milliseconds
         animator.repeatCount = 0 // Ensure the animation does not repeat
 
-//        if (playWhenReady) {
-//            animator.startDelay = 3500 // Delay in milliseconds before starting the animation
-//        }
-
         animator.start()
     }
 
@@ -2278,11 +1857,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     ): List<Locator> {
 
         val startTimeGetContent = System.currentTimeMillis()
-//        (navigator as? DecorableNavigator)?.applyPageNumberDecorations()
-//            navigator.applyDecorations(
-//                listOfNotNull(null),
-//                "tts"
-//            )
 
         if (locators.isEmpty())
             getCurrentVisibleContentRange(true)
@@ -2291,59 +1865,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val matchedIndexs = mutableListOf<Int>()
 
         val prevSegment = getNext15SecondInterval(timestamp, -1)
-
-//        for (locator in locators) {
-//            val text = locator.text.highlight.toString()
-//            val similarity = jaroWinkler.similarity(transcription, text)
-//            if (similarity > 0.5) { // Adjust the threshold as needed
-//                matchedLocators.add(locator)
-//                matchedDebugTest.add(locator.text.highlight.toString())
-//            }
-//        }
-
-//        val transcriptionSegments = transcription.split(" ") // Split transcription into words
-//
-//        for (locator in locators) {
-//            val text = locator.text.highlight.toString()
-//            for (segment in transcriptionSegments) {
-//                val similarity = jaroWinkler.similarity(segment, text)
-//                if (similarity > 0.5) { // Adjust the threshold as needed
-//                    matchedLocators.add(locator)
-//                    matchedDebugTest.add(locator.text.highlight.toString())
-//                    Timber.d("Transcription for: " + locator.text.highlight.toString()+ "|" + similarity + "|" + segment)
-//                    break // Stop comparing once a match is found
-//                }
-//            }
-//        }
-
-//        val transcriptionSegments = transcription.split(" ") // Split transcription into words
-//        val sentences = locators.map { it.text.highlight.toString() }
-//
-//        for (each in transcriptionSegments) {
-//            val closestMatches = sentences.map { it to jaroWinkler.similarity(each, it) }
-//                .filter { it.second >= 0.8 }
-//                .sortedByDescending { it.second }
-//                .take(1)
-//                .map { it.first }
-//
-//            val closestMatchIndex = closestMatches.firstOrNull()?.let { sentences.indexOf(it) }
-//
-////            voiceMap.add(
-////                mapOf(
-////                    "text" to each,
-////                    "closest_match" to closestMatches.firstOrNull(),
-////                    "closest_match_index" to closestMatchIndex,
-////                    "first_section" to 0,
-////                    "last_section" to 0
-////                )
-////            )
-//
-//            if (closestMatchIndex != null) {
-//                matchedLocators.add(locators[closestMatchIndex])
-//                matchedDebugTest.add(locators[closestMatchIndex].text.highlight.toString())
-//                Timber.d("Transcription for: " + locators[closestMatchIndex].text.highlight.toString())
-//            }
-//        }
 
         Timber.d("Transcription for locators.count():" + locators.count())
 
@@ -2357,8 +1878,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             val endIndex = if (locators.count() < 30) locators.count() - 1 else 30
             if (endIndex >= 0) locators.slice(0..endIndex) else emptyList()
         }
-
-//        val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
 
         // The fuzzy matching is the expensive part, so run it on a background thread against a
         // snapshot. locatorSlice is a prefix of locators, so its indices are locators indices.
@@ -2376,31 +1895,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             return emptyList()
         }
 
-
-//        val indexRange = findLongestRun(matchedIndexs,1)
-//        if(indexRange.isNotEmpty()) {
-//            matchedLocators =
-//                locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
-//
-//            // Remove locators from matchedLocators that are in locatorMap[prevSegment]
-////            val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
-////            matchedLocators = matchedLocators.filter { it !in prevLocators }.toMutableList()
-////
-////            matchedLocators = matchedLocators.distinct().toMutableList()
-//
-//            if (locatorMap.containsKey(prevSegment)) {
-//                locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
-//                    addAll(locators.subList(0, indexRange.first()))
-//                }
-//            }
-//
-////            locators.subList(0, indexRange.first()).clear()
-//            locators.subList(0, indexRange.last()).clear()
-//
-//        } else {
-//            matchedLocators.clear()
-//        }
-
         val indexRange = findLongestRun(matchedIndexs, 1)
         val hasLaterEntries =
             locatorMap.keys.any { it > roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString()) }
@@ -2411,82 +1905,18 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 locators.slice(0..indexRange.last()) as MutableList<Locator>
             }
 
-
             // Remove locators from matchedLocators that are in locatorMap[prevSegment]
-//            val prevLocators = locatorMap[prevSegment]?.toSet() ?: emptySet()
-//            matchedLocators = matchedLocators.filter { it !in prevLocators }.toMutableList()
-//
-//            matchedLocators = matchedLocators.distinct().toMutableList()
 
-//            if (locatorMap.containsKey(prevSegment)) {
-//                locatorMap[prevSegment] = locatorMap[prevSegment]!!.toMutableList().apply {
-//                    addAll(locators.subList(0, indexRange.first()))
-//                }
-//            }
-
-//            locators.subList(0, indexRange.first()).clear()
             locators.subList(0, indexRange.last()).clear()
 
         } else {
             matchedLocators.clear()
         }
 
-
-//        Timber.d("Transcription for: "+transcription)
-////        Timber.d("Transcription for: "+matchedDebugTest.toString())
-////        Timber.d("Transcription for: "+matchedIndexs.toString())
-//        Timber.d("Transcription for: "+matchedLocators.map { it.text.highlight.toString() }.toString())
-//        Timber.d("Transcription for: "+indexRange.toString())
         Timber.d("Transcription for time taken to transcribe: " + (System.currentTimeMillis() - startTimeGetContent))
-
-
-
 
         return matchedLocators
     }
-
-
-
-//    fun findLongestRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
-//        if (indices.isEmpty()) return emptyList()
-//
-//        val sortedIndices = indices.sorted()
-//        val filledIndices = mutableListOf<Int>()
-//
-//        // Fill in the gaps within the margin of error
-//        for (i in sortedIndices.indices) {
-//            filledIndices.add(sortedIndices[i])
-//            if (i < sortedIndices.size - 1) {
-//                val gap = sortedIndices[i + 1] - sortedIndices[i]
-//                if (gap > 1 && gap <= marginOfError + 1) {
-//                    for (j in 1 until gap) {
-//                        filledIndices.add(sortedIndices[i] + j)
-//                    }
-//                }
-//            }
-//        }
-//
-//        // Find the longest run of consecutive indices
-//        var longestRun = mutableListOf<Int>()
-//        var currentRun = mutableListOf<Int>()
-//
-//        for (i in filledIndices.indices) {
-//            if (currentRun.isEmpty() || filledIndices[i] - currentRun.last() == 1) {
-//                currentRun.add(filledIndices[i])
-//            } else {
-//                if (currentRun.size > longestRun.size) {
-//                    longestRun = currentRun
-//                }
-//                currentRun = mutableListOf(filledIndices[i])
-//            }
-//        }
-//
-//        if (currentRun.size > longestRun.size) {
-//            longestRun = currentRun
-//        }
-//
-//        return longestRun
-//    }
 
     fun findLongestRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
         if (indices.isEmpty()) return emptyList()
@@ -2570,12 +2000,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     suspend fun loadThenPlayStart(timestamps: List<String>) {
-//        isLoadingInitTranscription = true
         binding.loadingOverlay.visibility = View.VISIBLE
         audioNavigator.pause()
         if (locators.isEmpty())
             getCurrentVisibleContentRange()
-//        transcribeAudio(timestamp)
         Timber.d("Transcription for loadThenPlayStart")
         // The user is waiting on the overlay, so trade some battery for speed until playback
         // starts, then drop back to the low-power default for steady transcription
@@ -2623,62 +2051,25 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         prevLocators: List<Locator>? = null
     ) {
 
-
-//
-//                TOOOOOOOOOOO DOOOOOOOOOOOOOOOOOO
-//                   Remove overlap from Previous Locator
-//
         val currentAudioPosition = audioNavigator.currentLocator.value
         val currentEPubPosition = navigator.currentLocator.value
 
-//        Timber.d("Transcription for navSetting: "+navigator.settings.value)
-
         val settingsScroll = navigator.settings.value.scroll
-
-
-//        Timber.d("Transcription for navSetting"+navigator.settings.value.textAlign.toString())
-//        val epubPreferences = EpubPreferences
-//        navigator.submitPreferences()
 
         val nextSegment = getNext15SecondInterval(playbackTranscribeSegment, 1)
         val nextLocators = locatorMap.getOrDefault(nextSegment, listOf<Locator>())
 
         val matchedCount = matchedLocators?.count()
 
-
         matchedLocators?.isEmpty()?.let {
             if (!it) {
 
                 var pageLocator = matchedLocators[0]
 
-
                 if (settingsScroll && pageLocators != null)
-//                    if(((pageLocators[0].locations.progression ?: 0.0) - (pageLocator.locations.progression ?: 0.0)) < 0.001)
                     if (pageLocators.isNotEmpty())
                         if ((pageLocators[0].href == pageLocator.href))
                             pageLocator = pageLocators[0]
-
-//                Timber.d("Transcription for currentAudioPosition: " + currentAudioPosition.locations.totalProgression)
-//                Timber.d("Transcription for currentEPubPosition: " + currentEPubPosition.locations.position)
-//                Timber.d("Transcription for currentmatchedLocators[0]: " + matchedLocators[0].href)
-//                Timber.d("Transcription for currentLocatorPosition: " + pageLocators?.get(0)?.href)
-//                Timber.d("Transcription for testCompare: " + (pageLocators?.get(0)?.href == matchedLocators[0].href).toString())
-//                if (pageLocators != null) {
-//                    val numCompare = ((pageLocators[0].locations.progression
-//                        ?: 0.0) - ((matchedLocators[0].locations.progression ?: 0.0)))
-//
-//                    val testCompare = (numCompare < 0.001)
-//                    Timber.d("Transcription for numCompare: " + numCompare.toString())
-//                    Timber.d("Transcription for testCompare: " + testCompare.toString())
-//                }
-
-//                publication.normalizeLocator(matchedLocators[0])
-//                val iterator = publication.content(matchedLocators[0])?.iterator()
-//                val locatorToGoTo = if (iterator!!.hasPrevious()){
-//                    iterator.previous().locator
-//                } else {
-//                    matchedLocators[0]
-//                }
 
                 var locatorProg = pageLocator.locations.progression
                 var navigatorProg = navigator.currentLocator.value.locations.progression
@@ -2690,7 +2081,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         CachedWebView = findAllWebViews(requireView())
                         // The jump put the highlight back on screen
                         scrollBoost = 1.0
-
 
                         if (autoScrollTempPauseFlag == false) {
                             viewLifecycleOwner.lifecycleScope.launch {
@@ -2706,24 +2096,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     navigator.go(pageLocator, true)
                 }
 
-
-//                val rootView = requireView()
-//                val webViews = findAllWebViews(rootView)
                 // CALCULATE SPEED FROM PROGRESSIONNNNNNNN
-//                CachedWebView.forEach {
-////                    Timber.d("Found WebView: $it")
-//                    it.scrollBy(0,20)
-////                    it.scrollY += 20
-////                    it.flingScroll(0,50)
-//                }
-
-//                navigator.go(locatorToGoTo, true)
-//                navigator.goBackward(true)
 
                 var updatedMatchedLocators = matchedLocators
 
                 if (prevLocators != null && prevLocators.size >= 2) {
-//                    updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators + nextLocators).distinct()
                     updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators).distinct()
                 }
 
@@ -2733,7 +2110,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 if (currentHighlight != updatedMatchedLocators) {
                     currentHighlight = updatedMatchedLocators
                     currentNumberOfSegmentsListenedTo++
-
 
                     val random = Random.Default
 
@@ -2777,82 +2153,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     )
 
                     if (currentNumberOfSegmentsListenedTo >= 6) {
-//                        currentNumberOfSegmentsListenedTo = 0
-//                        audioNavigator.pause()
-
-//                        model.viewModelScope.launch {
-//                            val currentTime =
-//                                roundTimestampToNearest15Seconds(playbackTranscribeSegment)
-//                            locators.clear()
-////            transcriptionMap.clear()
-//                            // Clear only entries after currentTime
-//                            locatorMap.entries.removeIf { it.key > currentTime }
-//
-////                            binding.loadingOverlay.visibility = View.VISIBLE
-//                            globalIterator =
-//                                publication.content(latestLocatorPosition)!!
-//                                    .iterator()
-//
-//
-//
-////                        if (globalIterator.hasPrevious())
-////                            globalIterator.previous().locator
-////
-////                        if (globalIterator.hasPrevious())
-////                            globalIterator.previous().locator
-//
-//                            getCurrentVisibleContentRange(true)
-//
-//
-//
-//                            transcriptionMap.filterKeys { it > currentTime }
-//                                .forEach { (transcriptionTimestamp, result) ->
-//                                    locatorMap[transcriptionTimestamp] =
-//                                        syncTranscriptionWithLocator(result, transcriptionTimestamp)
-//                                }
-//
-////                            loadThenPlayStart(
-////                                generateTranscriptionRanges(
-////                                    roundTimestampToNearest15Seconds(currentTime)
-////                                )
-////                            )
-//                        }
 
                         forceLocatorSync(playbackTranscribeSegment)
 
                     }
                 }
                 // Concatenate locator.text.highlight into one string separated by spaces
-//                val concatenatedHighlights = updatedMatchedLocators.joinToString(" ") { it.text.highlight.toString() }
-//
-//                val after = updatedMatchedLocators.last().text.after
-//
-//                val before = updatedMatchedLocators.first().text.before
-//
-//                val subLocator = Locator.Text(
-//                    after = after,
-//                    before = before,
-//                    highlight = concatenatedHighlights
-//                )
-//
-//                val highlightSum = matchedLocators[0].copy(text = subLocator)
-//
-//                Timber.d("Transcription for highlightSum: " + highlightSum.toString())
-
-
-//                val decoration = Decoration(
-//                    id = "tts",
-//                    locator = highlightSum,
-//                    style = Decoration.Style.Highlight(tint = Color.rgb(
-//                                random.nextInt(256),
-//                                random.nextInt(256),
-//                                random.nextInt(256)
-//                            ))
-//                )
-
-
-//                navigator.applyDecorations(listOfNotNull(decoration), "tts")
-
 
             }
         }
@@ -2866,9 +2172,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             forceLocatorSync(playbackTranscribeSegment)
         }
 
-
-//        if (locators.count() < 100)
-//            getCurrentVisibleContentRange()
     }
 
     private fun findAllWebViews(
@@ -2893,7 +2196,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     // Add this property to your class
     private var autoScrollPauseJob: Job? = null
 
-
     // Call this function to start auto-scrolling
     private fun startAutoScrollWebViews() {
         // Cancel any existing job
@@ -2902,10 +2204,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             while (latestPlaybackStatus.playWhenReady && isActive) {
                 var scrollspeed: Double? = null
                 try {
-//                    if(scrollSpeedDialog.isAdded) {
                     scrollspeed =
                         (scrollSpeedDialog.preferencesModel.editor.value.preferences as AndroidTtsPreferences).speed
-//                    }
                 } catch (e: Exception) {
                     Timber.d("Transcription for scrollSpeedDialog: $e")
                 }
@@ -3001,8 +2301,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 publication.content(latestLocatorPosition)!!
                     .iterator()
 
-//            globalIterator = publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!.iterator()
-
             getCurrentVisibleContentRange(true)
 
             transcriptionMap.filterKeys { it >= currentTime }
@@ -3011,12 +2309,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         syncTranscriptionWithLocator(result, transcriptionTimestamp)
                 }
 
-//            locatorSyncingFlag = false
         }
     }
 
     private var locatorSyncingFlag = false
-
 
 }
 
