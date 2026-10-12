@@ -98,7 +98,6 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
-    implementation("com.arthenica:ffmpeg-kit-full:6.0-2.LTS")
 
     implementation("info.debatty:java-string-similarity:2.0.0")
 

@@ -55,7 +55,7 @@ import com.example.audebook.utils.WaveUtil;
 import com.example.audebook.asr.Recorder;
 import com.example.audebook.asr.Whisper
 
-import com.arthenica.ffmpegkit.FFmpegKit
+import com.example.audebook.utils.AudioSegmentExtractor
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -472,15 +472,12 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 //                FFmpegKit.execute(convertCommand)
 //            }
 
-            val command = "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -vn -c copy $outputFilePath"
-            Timber.d(command)
-            FFmpegKit.execute(command)
-
-            if (!outputFilePath.endsWith(".wav")){
-                val convertCommand = "-y -i $outputFilePath $outputFilePath.wav"
-                Timber.d(convertCommand)
-                FFmpegKit.execute(convertCommand)
-            }
+            AudioSegmentExtractor.extractToWav(
+                inputFilePath,
+                "$outputFilePath.wav",
+                convertTimestampToSeconds(startTime),
+                duration
+            )
         }
     }
 

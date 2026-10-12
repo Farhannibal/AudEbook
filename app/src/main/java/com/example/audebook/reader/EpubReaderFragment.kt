@@ -96,7 +96,7 @@ import kotlin.time.Duration
 import kotlin.time.DurationUnit
 
 
-import com.arthenica.ffmpegkit.FFmpegKit
+import com.example.audebook.utils.AudioSegmentExtractor
 import com.example.audebook.domain.Bookshelf
 //import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationRetriever
@@ -1452,19 +1452,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         startTime: String,
         duration: Int
     ) {
-//        withContext(Dispatchers.IO) {
-        val command =
-            "-y -ss $startTime -analyzeduration 1000000 -probesize 500000 -i \"$inputFilePath\" -t $duration -vn -c copy $outputFilePath"
-        Timber.d(command)
-        FFmpegKit.execute(command)
-
-        if (!outputFilePath.endsWith(".wav")) {
-//                val convertCommand = "-y -i $outputFilePath  $outputFilePath.wav"
-            val convertCommand =
-                "-y -i $outputFilePath  -ar 16000 -ac 1 -c:a pcm_s16le $outputFilePath.wav"
-            FFmpegKit.execute(convertCommand)
-        }
-//        }
+        // Callers always read "$outputFilePath.wav", so write there even when the input is a .wav
+        AudioSegmentExtractor.extractToWav(
+            inputFilePath,
+            "$outputFilePath.wav",
+            convertTimestampToSeconds(startTime),
+            duration
+        )
     }
 
     private fun convertTimestampToSeconds(timestamp: String): Int {
