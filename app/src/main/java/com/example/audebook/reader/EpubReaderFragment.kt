@@ -208,6 +208,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private var audioSegmentExtractor: AudioSegmentExtractor? = null
     private var isExtractingSegment = false
 
+    // Two WAV files take turns so the next slot can be cut while Whisper reads the current one
+    private var whisperWavPath: String? = null
+    private var prefetchedSegment: String? = null
+    private var prefetchedWavPath: String? = null
+
     // Serializes syncTranscriptionWithLocator, whose matching runs off the main thread
     private val syncMutex = Mutex()
 
@@ -293,6 +298,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                     lifecycleScope.launch(Dispatchers.Main) {
 //                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
                                         transcriptionMap[cachedCurrentTranscribeSegment] = result
+                                        // Start the next slot now instead of on the next playback
+                                        // tick. Only while playing, so it doesn't run on while paused
+                                        if (view != null && ::latestPlaybackStatus.isInitialized &&
+                                            latestPlaybackStatus.playWhenReady
+                                        ) {
+                                            getNextTranscriptionSegment()
+                                        }
                                         if (locatorMap.count() <= 10) {
                                             locatorMap[cachedCurrentTranscribeSegment] =
                                                 syncTranscriptionWithLocator(
@@ -1355,7 +1367,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
 //                    startTimeGetContent = System.currentTimeMillis()
 //                    Timber.d("Transcription for val inputFileType = inputFilePath.substringAfterLast(")
-                    val outputFilePath = sdcardDataFolder.absolutePath + "/extracted_segment"
                     val timestamp = withContext(Dispatchers.Main) {
                         binding.timelinePosition.text.toString()
                     }
@@ -1378,14 +1389,25 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
 //                    startTimeGetContent = System.currentTimeMillis()
 //                    Timber.d("Transcription for extractAudioSegment(inputFilePath, outputFilePath, startTimeFormatted, duration) ")
-                    if (!extractAudioSegment(outputFilePath, startTimeFormatted, duration)) return
+                    val wavPath = if (prefetchedSegment == currentTranscribeSegment && prefetchedWavPath != null) {
+                        // Already cut while Whisper was busy with the previous slot
+                        prefetchedWavPath!!.also {
+                            prefetchedSegment = null
+                            prefetchedWavPath = null
+                        }
+                    } else {
+                        val outputFilePath = freeWavBase(sdcardDataFolder)
+                        if (!extractAudioSegment(outputFilePath, startTimeFormatted, duration)) return
+                        "$outputFilePath.wav"
+                    }
 
 //                    Timber.d("Transcription for: "+ (System.currentTimeMillis() - startTimeGetContent))
 //                    startTimeGetContent = System.currentTimeMillis()
 //                    Timber.d("Transcription for mWhisper?.apply {")
+                    whisperWavPath = wavPath
                     mWhisper?.apply {
-                        setFilePath(outputFilePath + ".wav")
-                        Timber.d(outputFilePath + ".wav")
+                        setFilePath(wavPath)
+                        Timber.d(wavPath)
                         setAction(Whisper.ACTION_TRANSCRIBE)
                         start()
                     }
@@ -1403,10 +1425,56 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     mWhisper?.stop()
                     Timber.d("Transcription for currentTranscribeSegment: STOPPPPPP")
                 }
+                // Use the wait to cut the next slot, so Whisper can start it as soon as it's free
+                lifecycleScope.launch { prefetchNextSegment() }
             }
         } catch (e: Exception) {
             Timber.e(e, "Error occurred while transcribing audio")
         }
+    }
+
+    /**
+     * While Whisper works on [currentTranscribeSegment], cuts the slot after it into the WAV file
+     * Whisper isn't reading. transcribeAudio() then starts that slot without cutting it again.
+     */
+    private suspend fun prefetchNextSegment() {
+        val folder = withContext(Dispatchers.IO) { context?.getExternalFilesDir(null) } ?: return
+        val next = getNext15SecondInterval(currentTranscribeSegment, 1)
+        // Checked after the suspension above and with no suspension before extractAudioSegment()
+        // sets isExtractingSegment, so two prefetches can't start at once
+        if (isExtractingSegment || mWhisper?.isInProgress() != true ||
+            transcriptionMap.containsKey(next) || prefetchedSegment == next
+        ) return
+
+        val outputFilePath = freeWavBase(folder)
+        if (prefetchedWavPath == "$outputFilePath.wav") {
+            // Overwriting an older prefetch that wasn't used
+            prefetchedSegment = null
+            prefetchedWavPath = null
+        }
+        if (extractAudioSegment(outputFilePath, next, segmentLength)) {
+            prefetchedSegment = next
+            prefetchedWavPath = "$outputFilePath.wav"
+            Timber.d("Prefetched slot $next while Whisper was busy")
+            // Whisper may have finished while this was cutting; start the slot now rather than
+            // waiting for the next tick (Anchor polls on its own)
+            if (mWhisper?.isInProgress() == false && view != null &&
+                ::latestPlaybackStatus.isInitialized && latestPlaybackStatus.playWhenReady
+            ) {
+                getNextTranscriptionSegment()
+            }
+        }
+    }
+
+    /**
+     * Returns a WAV path (without ".wav") that Whisper isn't reading, preferring the one that
+     * doesn't hold a prefetched slot.
+     */
+    private fun freeWavBase(folder: File): String {
+        val bases = listOf("extracted_segment_a", "extracted_segment_b").map { "${folder.absolutePath}/$it" }
+        val inUse = if (mWhisper?.isInProgress() == true) whisperWavPath else null
+        return bases.firstOrNull { "$it.wav" != inUse && "$it.wav" != prefetchedWavPath }
+            ?: bases.first { "$it.wav" != inUse }
     }
 
 //    private suspend fun transcribeAudio(transcriptionTimestamp: String) {
@@ -1652,6 +1720,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
         val appContext = requireContext().applicationContext
         val previousExtractor = audioSegmentExtractor
+        // A clip cut ahead from a previous audiobook must not be transcribed for this one
+        prefetchedSegment = null
+        prefetchedWavPath = null
         audioSegmentExtractor = withContext(Dispatchers.IO) {
             previousExtractor?.close()
             try {
