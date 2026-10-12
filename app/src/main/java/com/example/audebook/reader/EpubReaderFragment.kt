@@ -98,6 +98,7 @@ import kotlin.time.DurationUnit
 
 import com.example.audebook.utils.AudioSegmentExtractor
 import com.example.audebook.utils.TranscriptMatcher
+import com.example.audebook.utils.TranscriptionPacing
 import com.example.audebook.domain.Bookshelf
 //import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.PublicationRetriever
@@ -300,6 +301,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                     lifecycleScope.launch(Dispatchers.Main) {
 //                                        binding.transcriptionResult.text = result + " \n\n\n" + timeTaken + "ms"
                                         transcriptionMap[cachedCurrentTranscribeSegment] = result
+                                        recordSlotTime(timeTaken)
                                         // Start the next slot now instead of on the next playback
                                         // tick. Only while playing, so it doesn't run on while paused
                                         if (view != null && ::latestPlaybackStatus.isInitialized &&
@@ -709,6 +711,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         // Fastest setting measured on a Galaxy S24+; 8 threads was slower than 4
         private const val ANCHOR_WHISPER_THREADS = 4
 
+        // Recent Whisper times averaged when choosing a thread count (see TranscriptionPacing)
+        private const val SLOT_TIME_WINDOW = 3
+
         // Auto-scroll catch-up. Positions are where the current highlight ends, as a fraction of
         // the readable area (1.0 = top of the audio controls).
         private const val CURRENT_HIGHLIGHT_ID_PREFIX = "tts-now-"
@@ -1108,40 +1113,94 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 //        }
     }
 
+    /**
+     * Starts transcribing the first slot without a transcript, from the playback position up to
+     * [maxSlotsAhead] slots ahead. Once that far ahead, Whisper idles until playback catches up.
+     */
     private suspend fun getNextTranscriptionSegment() {
-        var currentSegment = getPlaybackTranscribeSegment()
-        var iterations = 1
-
-//        val settingsSpeed = (audioNavigator.settings as ExoPlayerSettings).speed
-//
-//        Timber.d("Transcription for settingsSpeed: $settingsSpeed")
-
-        while (iterations <= 200) {
-
-            if (iterations <= 5) {
-//                val preferences = ExoPlayerPreferences(1.0,1.0)
-//
-//
-//                audioNavigator.submitPreferences(preferences as Configurable.Preferences<*>)
-
+        val playbackSegment = getPlaybackTranscribeSegment()
+        for (ahead in 0..maxSlotsAhead()) {
+            val segment = getNext15SecondInterval(playbackSegment, ahead)
+            if (!transcriptionMap.containsKey(segment)) {
+                if (ahead == 0) checkFallingBehind(segment)
+                Timber.d("No transcription found for $segment")
+                transcribeAudio(segment)
+                return
             }
-
-            if (transcriptionMap.containsKey(currentSegment)) {
-                // The map contains the key
-                val transcription = transcriptionMap[currentSegment]
-                Timber.d("Transcription for $currentSegment: $transcription")
-
-            } else {
-                // The map does not contain the key
-                Timber.d("No transcription found for $currentSegment")
-//                if (audioNavigator.playback.value.playWhenReady == true) {
-                transcribeAudio(currentSegment)
-//                }
-                break
-            }
-            currentSegment = getNext15SecondInterval(getPlaybackTranscribeSegment(), iterations)
-            iterations++
         }
+    }
+
+    // Applied playback speed, which the settings dialog doesn't report until it is changed
+    private fun playbackSpeed(): Double =
+        if (::audioNavigator.isInitialized) {
+            (audioNavigator.settings.value as? ExoPlayerSettings)?.speed ?: 1.0
+        } else {
+            1.0
+        }
+
+    /**
+     * How many slots past the playback position to keep transcribed: a fixed amount of listening
+     * time, so more slots at higher speeds (6 at 1x, 30 at 5x) for a bigger cushion.
+     */
+    private fun maxSlotsAhead(): Int = TranscriptionPacing.maxSlotsAhead(playbackSpeed(), segmentLength)
+
+    // Adaptive thread count for steady playback: Whisper times for recent slots decide whether
+    // it has enough headroom over the playback speed
+    private var transcriptionThreads = WhisperEngineJava.DEFAULT_NUM_THREADS
+    private val recentSlotTimesMs = ArrayDeque<Long>()
+    private var skipNextSlotTime = false
+    private var isAnchoring = false
+    private var lastBehindSegment: String? = null
+
+    private fun isPlaying() = ::latestPlaybackStatus.isInitialized && latestPlaybackStatus.playWhenReady
+
+    /**
+     * Called with how long Whisper took for a slot. Once there are [SLOT_TIME_WINDOW] samples,
+     * lets [TranscriptionPacing.nextThreadCount] step the thread count up or down.
+     */
+    private fun recordSlotTime(timeTakenMs: Long) {
+        // Anchor runs at its own thread count, and while paused there is no deadline
+        if (isAnchoring || !isPlaying()) return
+        // The slot after a change may have started at the old thread count
+        if (skipNextSlotTime) {
+            skipNextSlotTime = false
+            return
+        }
+        recentSlotTimesMs.addLast(timeTakenMs)
+        if (recentSlotTimesMs.size > SLOT_TIME_WINDOW) recentSlotTimesMs.removeFirst()
+        if (recentSlotTimesMs.size < SLOT_TIME_WINDOW) return
+
+        val headroom = TranscriptionPacing.headroom(recentSlotTimesMs.average(), playbackSpeed(), segmentLength)
+        val threads = TranscriptionPacing.nextThreadCount(transcriptionThreads, headroom)
+        if (threads != transcriptionThreads) {
+            setTranscriptionThreads(threads, "headroom %.1fx".format(headroom))
+        }
+    }
+
+    /**
+     * Playback reaching a slot with no transcript, right after one that had one, means
+     * transcription fell behind during continuous playback (unlike a seek or a fresh start).
+     */
+    private fun checkFallingBehind(segment: String) {
+        if (isAnchoring || !isPlaying() || segment == lastBehindSegment) return
+        if (!transcriptionMap.containsKey(getNext15SecondInterval(segment, -1))) return
+        lastBehindSegment = segment
+        Timber.w(
+            "Transcription is behind playback at $segment (%.1fx speed, $transcriptionThreads threads)"
+                .format(playbackSpeed())
+        )
+        val threads = TranscriptionPacing.threadsAfterFallingBehind(transcriptionThreads)
+        if (threads != transcriptionThreads) {
+            setTranscriptionThreads(threads, "fell behind playback")
+        }
+    }
+
+    private fun setTranscriptionThreads(threads: Int, reason: String) {
+        Timber.i("Whisper threads $transcriptionThreads -> $threads ($reason, %.1fx speed)".format(playbackSpeed()))
+        transcriptionThreads = threads
+        recentSlotTimesMs.clear()
+        skipNextSlotTime = true
+        if (!isAnchoring) mWhisper?.setNumThreads(threads)
     }
 
     private fun getPlaybackTranscribeSegment(): String {
@@ -1472,6 +1531,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         if (isExtractingSegment || mWhisper?.isInProgress() != true ||
             transcriptionMap.containsKey(next) || prefetchedSegment == next
         ) return
+        // Don't cut a slot beyond the lookahead; it won't be transcribed until playback gets closer
+        val slotsAhead = (convertTimestampToSeconds(next) -
+            convertTimestampToSeconds(getPlaybackTranscribeSegment())) / segmentLength
+        if (!isAnchoring && slotsAhead > maxSlotsAhead()) return
 
         val outputFilePath = freeWavBase(folder)
         if (prefetchedWavPath == "$outputFilePath.wav") {
@@ -2510,6 +2573,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         Timber.d("Transcription for loadThenPlayStart")
         // The user is waiting on the overlay, so trade some battery for speed until playback
         // starts, then drop back to the low-power default for steady transcription
+        isAnchoring = true
         mWhisper?.setNumThreads(ANCHOR_WHISPER_THREADS)
         val finished = try {
             withTimeoutOrNull(ANCHOR_TIMEOUT_MS) {
@@ -2528,7 +2592,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 }
             }
         } finally {
-            mWhisper?.setNumThreads(WhisperEngineJava.DEFAULT_NUM_THREADS)
+            // Back to the adaptive level for steady playback
+            isAnchoring = false
+            mWhisper?.setNumThreads(transcriptionThreads)
         }
         if (finished == null) {
             Timber.w("Anchor gave up waiting for transcripts after $ANCHOR_TIMEOUT_MS ms; playing anyway")
