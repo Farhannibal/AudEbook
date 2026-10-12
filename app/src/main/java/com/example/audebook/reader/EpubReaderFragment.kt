@@ -107,6 +107,8 @@ import com.example.audebook.reader.tts.TtsPreferencesBottomSheetDialogFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -706,6 +708,31 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         // Fastest setting measured on a Galaxy S24+; 8 threads was slower than 4
         private const val ANCHOR_WHISPER_THREADS = 4
+
+        // Auto-scroll catch-up. Positions are where the current highlight ends, as a fraction of
+        // the readable area (1.0 = top of the audio controls).
+        private const val CURRENT_HIGHLIGHT_ID_PREFIX = "tts-now-"
+        private const val HIGHLIGHT_CHECK_INTERVAL_MS = 300L
+        private const val HIGHLIGHT_NEAR_BOTTOM_POSITION = 0.8
+        private const val HIGHLIGHT_OFFSCREEN_POSITION = 1.0
+        private const val HIGHLIGHT_CAUGHT_UP_POSITION = 0.55
+        private const val SCROLL_BOOST_NEAR_BOTTOM = 3.0
+        private const val SCROLL_BOOST_OFFSCREEN = 6.0
+
+        // Bottom of the current slot's highlight as a fraction of the page height, from the
+        // text ranges Readium keeps for the "tts" decoration group in each chapter's WebView
+        private const val CURRENT_HIGHLIGHT_BOTTOM_JS = """
+            (function() {
+                if (!window.readium || !readium.getDecorations) return null;
+                var bottom = null;
+                readium.getDecorations('tts').items.forEach(function(item) {
+                    if (String(item.decoration.id).indexOf('$CURRENT_HIGHLIGHT_ID_PREFIX') !== 0) return;
+                    var rect = item.range.getBoundingClientRect();
+                    if (rect.height > 0 && (bottom === null || rect.bottom > bottom)) bottom = rect.bottom;
+                });
+                return bottom === null ? null : bottom / window.innerHeight;
+            })()
+        """
     }
 
     private suspend fun openAudio(
@@ -2589,6 +2616,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                         navigator.go(pageLocator, true)
                         CachedWebView = findAllWebViews(requireView())
+                        // The jump put the highlight back on screen
+                        scrollBoost = 1.0
 
 
                         if (autoScrollTempPauseFlag == false) {
@@ -2642,9 +2671,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         "tts"
                     )
 
-                    val decorations: List<Decoration> = updatedMatchedLocators.map { locator ->
+                    // Unique ids, so Readium can tell the decorations apart and the auto-scroll
+                    // can find the current slot's highlight (see currentHighlightBottom)
+                    val decorations: List<Decoration> = updatedMatchedLocators.mapIndexed { index, locator ->
                         Decoration(
-                            id = "tts",
+                            id = "$CURRENT_HIGHLIGHT_ID_PREFIX$index",
                             locator = locator,
                             style = Decoration.Style.Highlight(
                                 tint = lastColour
@@ -2658,9 +2689,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         Color.rgb(124, 198, 247)
                     }
 
-                    val decorations2: List<Decoration> = nextLocators.distinct().map { locator ->
+                    val decorations2: List<Decoration> = nextLocators.distinct().mapIndexed { index, locator ->
                         Decoration(
-                            id = "tts",
+                            id = "tts-next-$index",
                             locator = locator,
                             style = Decoration.Style.Highlight(
                                 tint = lastColour
@@ -2809,12 +2840,68 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
                 if (scrollspeed == null)
                     scrollspeed = 1.0
+
+                val now = System.currentTimeMillis()
+                if (now - lastHighlightCheckAt >= HIGHLIGHT_CHECK_INTERVAL_MS) {
+                    lastHighlightCheckAt = now
+                    updateScrollBoost()
+                }
+
                 CachedWebView.forEach {
                     it.scrollBy(0, 4)
                 }
-                delay((100 / scrollspeed).toLong()) // 0.1 seconds
+                delay((100 / (scrollspeed * scrollBoost)).toLong()) // 0.1 seconds at 1x
             }
         }
+    }
+
+    // Multiplies the auto-scroll speed while the spoken text is close to the controls, so the
+    // highlight doesn't run off the bottom of the page. Kept across restarts of the scroll job,
+    // which happen on every playback event.
+    private var scrollBoost = 1.0
+    private var lastHighlightCheckAt = 0L
+
+    private suspend fun updateScrollBoost() {
+        // Unknown (highlight in another chapter, or not drawn yet): keep the current speed
+        val position = currentHighlightBottom() ?: return
+        val boost = when {
+            position >= HIGHLIGHT_OFFSCREEN_POSITION -> SCROLL_BOOST_OFFSCREEN
+            position >= HIGHLIGHT_NEAR_BOTTOM_POSITION -> SCROLL_BOOST_NEAR_BOTTOM
+            position <= HIGHLIGHT_CAUGHT_UP_POSITION -> 1.0
+            // In between: keep going at the current speed until it has properly caught up,
+            // so it doesn't flip between speeds around the threshold
+            else -> scrollBoost
+        }
+        if (boost != scrollBoost) {
+            Timber.d("Auto-scroll boost $scrollBoost -> $boost (highlight at %.2f of the page)".format(position))
+            scrollBoost = boost
+        }
+    }
+
+    /**
+     * Where the bottom of the current slot's highlight is, as a fraction of the readable area:
+     * 0 is the top of the page and 1 is the top edge of the audio controls. Null if no visible
+     * page has the highlight.
+     */
+    private suspend fun currentHighlightBottom(): Double? {
+        val root = view ?: return null
+        val controls = binding.audioOverlay
+        val readableFraction = if (controls.isShown && root.height > 0) {
+            controls.top.toDouble() / root.height
+        } else {
+            1.0
+        }
+        for (webView in CachedWebView) {
+            if (!webView.isShown) continue
+            val result = withTimeoutOrNull(250) {
+                suspendCancellableCoroutine<String?> { continuation ->
+                    webView.evaluateJavascript(CURRENT_HIGHLIGHT_BOTTOM_JS) { continuation.resume(it) }
+                }
+            }
+            val bottom = result?.toDoubleOrNull() ?: continue
+            return bottom / readableFraction
+        }
+        return null
     }
 
     // Call this function to stop auto-scrolling
