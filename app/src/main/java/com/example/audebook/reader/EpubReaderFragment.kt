@@ -96,6 +96,7 @@ import kotlin.time.DurationUnit
 
 import com.example.audebook.utils.AudioSegmentExtractor
 import com.example.audebook.utils.TranscriptMatcher
+import com.example.audebook.utils.SpeedRamp
 import com.example.audebook.utils.TranscriptionPacing
 import com.example.audebook.utils.extensions.persistDocumentAccess
 import com.example.audebook.domain.Bookshelf
@@ -121,6 +122,7 @@ import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.StateFlow
 import org.readium.r2.navigator.preferences.Configurable
 import org.readium.r2.navigator.preferences.Preference
 import java.io.InputStream
@@ -702,6 +704,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             ExoPlayerPreferencesManagerFactory(application.readerRepository.preferencesDataStoreRepo)
                 .createPreferenceManager(bookId)
         val initialPreferences = preferencesManager.preferences.value
+        // The speed the user chose; the ramp eases up to it without changing it
+        audioPreferences = preferencesManager.preferences
 
         val navigatorFactory = AudioNavigatorFactory(
             publication,
@@ -726,6 +730,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 }
             )
         }
+
+        speedRampNavigator = navigator
 
         val initData = MediaReaderInitData(
             bookId,
@@ -779,6 +785,15 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
             return
         }
+
+        // Ease up to the chosen speed whenever playback starts, whatever started it (the play
+        // button, Anchor, or a headset or notification control)
+        if (playback.playWhenReady && !wasPlaying) {
+            startSpeedRamp()
+        } else if (!playback.playWhenReady && wasPlaying) {
+            speedRampJob?.cancel()
+        }
+        wasPlaying = playback.playWhenReady
 
         binding.playPause.isEnabled = true
         binding.timelineBar.isEnabled = true
@@ -1001,6 +1016,45 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 Timber.d("No transcription found for $segment")
                 transcribeAudio(segment)
                 return
+            }
+        }
+    }
+
+    // Playback speed ramp (see SpeedRamp): playback starts at 1x and rises to the chosen speed
+    private var audioPreferences: StateFlow<ExoPlayerPreferences>? = null
+    private var speedRampNavigator: AudioNavigator<ExoPlayerSettings, ExoPlayerPreferences>? = null
+    private var speedRampJob: Job? = null
+    private var wasPlaying = false
+
+    /**
+     * Submits gradually rising speeds to the player, then the user's own preferences once the
+     * chosen speed is reached. The saved setting is never changed, and the target is re-read on
+     * every step, so changing the speed during the ramp still takes effect.
+     */
+    private fun startSpeedRamp() {
+        speedRampJob?.cancel()
+        val navigator = speedRampNavigator ?: return
+        val preferences = audioPreferences ?: return
+        if (!SpeedRamp.shouldRamp(preferences.value.speed ?: 1.0)) return
+
+        Timber.d(
+            "Speed ramp: %.1fx -> %.1fx over %d ms".format(
+                SpeedRamp.START_SPEED, preferences.value.speed ?: 1.0, SpeedRamp.durationMs(preferences.value.speed ?: 1.0)
+            )
+        )
+        speedRampJob = viewLifecycleOwner.lifecycleScope.launch {
+            val startedAt = System.currentTimeMillis()
+            while (isActive) {
+                val chosen = preferences.value
+                val target = chosen.speed ?: 1.0
+                val speed = SpeedRamp.speedAt(System.currentTimeMillis() - startedAt, target)
+                if (speed >= target) {
+                    navigator.submitPreferences(chosen)
+                    Timber.d("Speed ramp reached %.1fx".format(target))
+                    break
+                }
+                navigator.submitPreferences(chosen.copy(speed = speed))
+                delay(SpeedRamp.STEP_INTERVAL_MS)
             }
         }
     }
