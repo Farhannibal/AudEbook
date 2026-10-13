@@ -41,13 +41,24 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Phones, plus both emulator image types (the Pixel 3a API 30 image is 32-bit x86)
+            ndk { abiFilters += listOf("arm64-v8a", "x86_64", "x86") }
+        }
         release {
-            isMinifyEnabled = false
+            // 64-bit ARM phones only; older 32-bit phones are too slow to keep up with Whisper
+            ndk { abiFilters += listOf("arm64-v8a") }
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
+    }
+    androidResources {
+        // Stored uncompressed so the model can be memory-mapped straight from the APK
+        noCompress += "tflite"
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true

@@ -71,9 +71,13 @@ public class WhisperUtil {
 
     // Load filters and vocab data from pre-generated filters_vocab_en.bin file
     public boolean loadFiltersAndVocab(boolean multilingual, String vocabPath) throws IOException {
+        return loadFiltersAndVocab(multilingual, Files.readAllBytes(Paths.get(vocabPath)), vocabPath);
+    }
+
+    /** Same as the path version, for a vocab file already read into memory (e.g. from assets). */
+    public boolean loadFiltersAndVocab(boolean multilingual, byte[] bytes, String vocabPath) {
 
         // Read vocab file
-        byte[] bytes = Files.readAllBytes(Paths.get(vocabPath));
         ByteBuffer vocabBuf = ByteBuffer.wrap(bytes);
         vocabBuf.order(ByteOrder.nativeOrder());
         Log.d(TAG, "Vocab file size: " + vocabBuf.limit());

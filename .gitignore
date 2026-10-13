@@ -14,4 +14,5 @@
 .cxx
 local.properties
 /app/src/main/assets/book/audio/TheShadowOfTheTorturer.epub/ShadowoftheTorturer.m4a
-/app/src/main/assets/whisper-base.en.tflite
+/ml-models/whisper-base.en.tflite
+.kotlin

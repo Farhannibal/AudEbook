@@ -1,6 +1,7 @@
 package com.example.audebook.engine;
 
 import android.content.Context;
+import android.content.res.AssetFileDescriptor;
 import android.util.Log;
 
 //import com.google.android.gms.tflite.client.TfLiteInitializationOptions;
@@ -18,8 +19,10 @@ import org.tensorflow.lite.Tensor;
 import org.tensorflow.lite.nnapi.NnApiDelegate;
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -75,6 +78,39 @@ public class WhisperEngineJava implements WhisperEngine {
         }
 
         return mIsInitialized;
+    }
+
+    /**
+     * Loads the model and vocab bundled in the APK's assets. The model is memory-mapped in place
+     * (it is stored uncompressed, see noCompress in build.gradle.kts), so nothing is copied to
+     * storage.
+     */
+    @Override
+    public boolean initializeFromAssets(String modelAsset, String vocabAsset, boolean multilingual) throws IOException {
+        try (AssetFileDescriptor descriptor = mContext.getAssets().openFd(modelAsset);
+             FileInputStream stream = new FileInputStream(descriptor.getFileDescriptor())) {
+            mModelBuffer = stream.getChannel().map(
+                    FileChannel.MapMode.READ_ONLY, descriptor.getStartOffset(), descriptor.getDeclaredLength());
+        }
+        mInterpreter = new Interpreter(mModelBuffer, createOptions());
+        Log.d(TAG, "Model is loaded from assets..." + modelAsset);
+
+        byte[] vocab;
+        try (InputStream input = mContext.getAssets().open(vocabAsset)) {
+            vocab = readAll(input);
+        }
+        mIsInitialized = mWhisperUtil.loadFiltersAndVocab(multilingual, vocab, vocabAsset);
+        return mIsInitialized;
+    }
+
+    private static byte[] readAll(InputStream input) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[64 * 1024];
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
     }
 
     // Unload the model by closing the interpreter

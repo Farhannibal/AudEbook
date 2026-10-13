@@ -81,13 +81,6 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
     private var binding: FragmentAudiobookBinding by viewLifecycle()
     private var seekingItem: Int? = null
 
-    // whisper-tiny.tflite and whisper-base-nooptim.en.tflite works well
-    private val DEFAULT_MODEL_TO_USE = "whisper-tiny.tflite"
-    // English only model ends with extension ".en.tflite"
-    private val ENGLISH_ONLY_MODEL_EXTENSION = ".en.tflite"
-    private val ENGLISH_ONLY_VOCAB_FILE = "filters_vocab_en.bin"
-    private val MULTILINGUAL_VOCAB_FILE = "filters_vocab_multilingual.bin"
-    private val EXTENSIONS_TO_COPY = arrayOf("tflite", "bin", "wav", "pcm")
 
     private var startTime: Long = 0
 
@@ -116,15 +109,18 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
             lifecycleScope.launch(Dispatchers.IO) {
                 val sdcardDataFolder = ctx.getExternalFilesDir(null)
                 if (sdcardDataFolder != null) {
-                    copyAssetsToSdcard(ctx, sdcardDataFolder, EXTENSIONS_TO_COPY)
-                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-base.en.tflite")
-//                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-tiny.en.tflite")
-                    val vocabFile = File(sdcardDataFolder, "filters_vocab_en.bin")
+                    Whisper.deleteLegacyModelCopies(sdcardDataFolder)
+                    // Same bundled model as the EPUB reader; load it here on the IO thread
+                    val loadedWhisper = Whisper(ctx).apply {
+                        loadModelFromAssets(Whisper.MODEL_ASSET, Whisper.VOCAB_ASSET, false)
+                    }
 
                     withContext(Dispatchers.Main) {
-                        if (mWhisper == null) {
-                            mWhisper = Whisper(ctx)
-                            mWhisper?.loadModel(selectedTfliteFile, vocabFile, false)
+                        if (mWhisper != null) {
+                            // Already have one; free the extra model off the main thread
+                            CoroutineScope(Dispatchers.IO).launch { loadedWhisper.release() }
+                        } else {
+                            mWhisper = loadedWhisper
 
                             mWhisper?.setListener(object : Whisper.WhisperListener {
                                 override fun onUpdateReceived(message: String) {
@@ -347,14 +343,6 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 //                    binding.transcriptionResult.text = "Transcribing..."
 
 
-                    val files = listOf(
-                        "jfk.wav",
-                        "english_test2.wav",
-                        "english_test1.wav",
-                        "english_test_3_bili.wav"
-                    )
-                    val randomFile = files.random()
-
                     Timber.d(navigator.readingOrder.items[0].toString())
 
 //                    val inputFilePath = "data/user/0/com.example.audebook/files/b901dd88-80c9-44b6-94fc-46bd4d609a96.m4a"
@@ -374,15 +362,9 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
 //d
 
 
-                    val selectedWaveFile = File(sdcardDataFolder, randomFile)
-
                     mWhisper?.apply {
-//                            setFilePath(selectedWaveFile.absolutePath)
-//                            Timber.d(selectedWaveFile.absolutePath)
-//                            playAudio(selectedWaveFile.absolutePath)
                         setFilePath(outputFilePath + ".wav")
                         Timber.d(outputFilePath + ".wav")
-//                            playAudio(outputFilePath + ".wav")
                         setAction(Whisper.ACTION_TRANSCRIBE)
                         start()
                     }
@@ -412,45 +394,6 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
         model.viewModelScope.launch {
             navigator.go(locator)
             navigator.play()
-        }
-    }
-
-    private suspend fun copyAssetsToSdcard(context: Context, destFolder: File, extensions: Array<String>) {
-        val assetManager: AssetManager = context.assets
-
-        try {
-            // List all files in the assets folder once
-            val assetFiles: Array<String> = withContext(Dispatchers.IO) {
-                assetManager.list("") ?: return@withContext emptyArray()
-            }
-
-            for (assetFileName in assetFiles) {
-                // Check if file matches any of the provided extensions
-                for (extension in extensions) {
-                    if (assetFileName.endsWith(".$extension")) {
-                        val outFile = File(destFolder, assetFileName)
-
-                        // Skip if file already exists
-                        if (withContext(Dispatchers.IO) { outFile.exists() }) break
-
-                        // Copy the file from assets to the destination folder
-                        withContext(Dispatchers.IO) {
-                            assetManager.open(assetFileName).use { inputStream ->
-                                FileOutputStream(outFile).use { outputStream ->
-                                    val buffer = ByteArray(1024)
-                                    var bytesRead: Int
-                                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                                        outputStream.write(buffer, 0, bytesRead)
-                                    }
-                                }
-                            }
-                        }
-                        break // No need to check further extensions
-                    }
-                }
-            }
-        } catch (e: IOException) {
-            e.printStackTrace()
         }
     }
 
@@ -500,24 +443,6 @@ class AudioReaderFragment : BaseReaderFragment(), SeekBar.OnSeekBarChangeListene
             }
         }
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
-    }
-
-    private fun playAudio(filePath: String) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val mediaPlayer = MediaPlayer()
-            try {
-                mediaPlayer.setDataSource(filePath)
-                mediaPlayer.prepare()
-                mediaPlayer.setOnPreparedListener {
-                    it.start()
-                }
-                mediaPlayer.setOnCompletionListener {
-                    it.release()
-                }
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
     }
 
     private fun transcribeAudio() {

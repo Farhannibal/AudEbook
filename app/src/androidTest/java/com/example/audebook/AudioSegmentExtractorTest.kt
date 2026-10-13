@@ -4,6 +4,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.audebook.asr.Whisper
 import com.example.audebook.engine.WhisperEngineJava
 import com.example.audebook.utils.AudioSegmentExtractor
 import com.example.audebook.utils.WaveUtil
@@ -118,24 +119,15 @@ class AudioSegmentExtractorTest {
         return ab / sqrt(aa * bb)
     }
 
+    // Uses the same bundled, memory-mapped model the app loads
     private fun transcribe(wav: File): String {
-        val model = copyAsset("whisper-tiny-en.tflite")
-        val vocab = copyAsset("filters_vocab_en.bin")
         val engine = WhisperEngineJava(context)
-        engine.initialize(model.absolutePath, vocab.absolutePath, false)
+        assertTrue(engine.initializeFromAssets(Whisper.MODEL_ASSET, Whisper.VOCAB_ASSET, false))
         return try {
             engine.transcribeFile(wav.absolutePath)
         } finally {
             engine.deinitialize()
         }
-    }
-
-    private fun copyAsset(name: String): File {
-        val file = File(context.cacheDir, name)
-        if (!file.exists()) {
-            context.assets.open(name).use { input -> file.outputStream().use { input.copyTo(it) } }
-        }
-        return file
     }
 
     companion object {

@@ -10,7 +10,6 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.content.res.AssetManager
 import android.database.Cursor
 import android.graphics.Color
 import android.graphics.drawable.AnimatedVectorDrawable
@@ -159,7 +158,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private var seekingItem: Int? = null
 
-    private val EXTENSIONS_TO_COPY = arrayOf("tflite", "bin", "wav", "pcm")
 
     private var startTime: Long = 0
 
@@ -243,14 +241,18 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             lifecycleScope.launch(Dispatchers.IO) {
                 val sdcardDataFolder = ctx.getExternalFilesDir(null)
                 if (sdcardDataFolder != null) {
-                    copyAssetsToSdcard(ctx, sdcardDataFolder, EXTENSIONS_TO_COPY)
-                    val selectedTfliteFile = File(sdcardDataFolder, "whisper-tiny-en.tflite")
-                    val vocabFile = File(sdcardDataFolder, "filters_vocab_en.bin")
+                    Whisper.deleteLegacyModelCopies(sdcardDataFolder)
+                    // Load here on the IO thread; the model is memory-mapped from the APK
+                    val loadedWhisper = Whisper(ctx).apply {
+                        loadModelFromAssets(Whisper.MODEL_ASSET, Whisper.VOCAB_ASSET, false)
+                    }
 
                     withContext(Dispatchers.Main) {
-                        if (mWhisper == null) {
-                            mWhisper = Whisper(ctx)
-                            mWhisper?.loadModel(selectedTfliteFile, vocabFile, false)
+                        if (mWhisper != null) {
+                            // Already have one; free the extra model off the main thread
+                            CoroutineScope(Dispatchers.IO).launch { loadedWhisper.release() }
+                        } else {
+                            mWhisper = loadedWhisper
 
                             mWhisper?.setListener(object : Whisper.WhisperListener {
                                 override fun onUpdateReceived(message: String) {
@@ -795,7 +797,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         val playbackTranscribeSegment =
-            roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
+            roundDownToSlot(binding.timelinePosition.text.toString())
         val currentTime = System.currentTimeMillis()
 
         if (currentTime - lastHighlightUpdate >= 500) {
@@ -803,7 +805,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             if (locatorMap.containsKey(playbackTranscribeSegment)) {
                 model.viewModelScope.launch {
                     if (locatorMap.containsKey(
-                            getNext15SecondInterval(
+                            offsetSlot(
                                 playbackTranscribeSegment,
                                 -2
                             )
@@ -811,11 +813,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     ) {
                         highlightText(
                             locatorMap[playbackTranscribeSegment], playbackTranscribeSegment,
-                            locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -2)],
-                            locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)]
+                            locatorMap[offsetSlot(playbackTranscribeSegment, -2)],
+                            locatorMap[offsetSlot(playbackTranscribeSegment, -1)]
                         )
                     } else if (locatorMap.containsKey(
-                            getNext15SecondInterval(
+                            offsetSlot(
                                 playbackTranscribeSegment,
                                 -1
                             )
@@ -823,8 +825,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     ) {
                         highlightText(
                             locatorMap[playbackTranscribeSegment], playbackTranscribeSegment,
-                            locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)],
-                            locatorMap[getNext15SecondInterval(playbackTranscribeSegment, -1)]
+                            locatorMap[offsetSlot(playbackTranscribeSegment, -1)],
+                            locatorMap[offsetSlot(playbackTranscribeSegment, -1)]
                         )
                     } else {
                         highlightText(
@@ -993,7 +995,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private suspend fun getNextTranscriptionSegment() {
         val playbackSegment = getPlaybackTranscribeSegment()
         for (ahead in 0..maxSlotsAhead()) {
-            val segment = getNext15SecondInterval(playbackSegment, ahead)
+            val segment = offsetSlot(playbackSegment, ahead)
             if (!transcriptionMap.containsKey(segment)) {
                 if (ahead == 0) checkFallingBehind(segment)
                 Timber.d("No transcription found for $segment")
@@ -1056,7 +1058,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
      */
     private fun checkFallingBehind(segment: String) {
         if (isAnchoring || !isPlaying() || segment == lastBehindSegment) return
-        if (!transcriptionMap.containsKey(getNext15SecondInterval(segment, -1))) return
+        if (!transcriptionMap.containsKey(offsetSlot(segment, -1))) return
         lastBehindSegment = segment
         Timber.w(
             "Transcription is behind playback at $segment (%.1fx speed, $transcriptionThreads threads)"
@@ -1077,7 +1079,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     private fun getPlaybackTranscribeSegment(): String {
-        return roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
+        return roundDownToSlot(binding.timelinePosition.text.toString())
     }
 
     private fun updateTimeline(
@@ -1214,49 +1216,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-    private suspend fun copyAssetsToSdcard(
-        context: Context,
-        destFolder: File,
-        extensions: Array<String>
-    ) {
-        val assetManager: AssetManager = context.assets
-
-        try {
-            // List all files in the assets folder once
-            val assetFiles: Array<String> = withContext(Dispatchers.IO) {
-                assetManager.list("") ?: return@withContext emptyArray()
-            }
-
-            for (assetFileName in assetFiles) {
-                // Check if file matches any of the provided extensions
-                for (extension in extensions) {
-                    if (assetFileName.endsWith(".$extension")) {
-                        val outFile = File(destFolder, assetFileName)
-
-                        // Skip if file already exists
-                        if (withContext(Dispatchers.IO) { outFile.exists() }) break
-
-                        // Copy the file from assets to the destination folder
-                        withContext(Dispatchers.IO) {
-                            assetManager.open(assetFileName).use { inputStream ->
-                                FileOutputStream(outFile).use { outputStream ->
-                                    val buffer = ByteArray(1024)
-                                    var bytesRead: Int
-                                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                                        outputStream.write(buffer, 0, bytesRead)
-                                    }
-                                }
-                            }
-                        }
-                        break // No need to check further extensions
-                    }
-                }
-            }
-        } catch (e: IOException) {
-            e.printStackTrace()
-        }
-    }
-
     private suspend fun transcribeAudio(transcriptionTimestamp: String) {
         try {
             if (mWhisper?.isInProgress() == false && !transcriptionMap.containsKey(
@@ -1333,7 +1292,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
      */
     private suspend fun prefetchNextSegment() {
         val folder = withContext(Dispatchers.IO) { context?.getExternalFilesDir(null) } ?: return
-        val next = getNext15SecondInterval(currentTranscribeSegment, 1)
+        val next = offsetSlot(currentTranscribeSegment, 1)
         // Checked after the suspension above and with no suspension before extractAudioSegment()
         // sets isExtractingSegment, so two prefetches can't start at once
         if (isExtractingSegment || mWhisper?.isInProgress() != true ||
@@ -1411,7 +1370,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
     }
 
-    private fun roundTimestampToNearest15Seconds(timestamp: String): String {
+    /** Rounds an "HH:MM:SS" position down to the start of its slot (segmentLength seconds). */
+    private fun roundDownToSlot(timestamp: String): String {
 
         var parts = timestamp.split(":").map { it.toInt() }.toMutableList()
         if (parts.size != 3) {
@@ -1452,7 +1412,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return ranges
     }
 
-    private fun getNext15SecondInterval(currentTranscribeSegment: String, intervals: Int): String {
+    /** The slot [intervals] slots after (or before, if negative) the given "HH:MM:SS" slot. */
+    private fun offsetSlot(currentTranscribeSegment: String, intervals: Int): String {
         val baseTimeInSeconds = convertTimestampToSeconds(currentTranscribeSegment)
         val newTimeInSeconds = baseTimeInSeconds + (intervals * segmentLength)
         val hours = newTimeInSeconds / 3600
@@ -1796,7 +1757,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             getCurrentVisibleContentRange(true)
 
             val currentTime =
-                roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString())
+                roundDownToSlot(binding.timelinePosition.text.toString())
 
             // Iterate over transcriptionMap and update locatorMap
 
@@ -1810,7 +1771,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
             loadThenPlayStart(
                 generateTranscriptionRanges(
-                    roundTimestampToNearest15Seconds(
+                    roundDownToSlot(
                         currentTime
                     )
                 )
@@ -1864,7 +1825,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val matchedDebugTest = mutableListOf<String>()
         val matchedIndexs = mutableListOf<Int>()
 
-        val prevSegment = getNext15SecondInterval(timestamp, -1)
+        val prevSegment = offsetSlot(timestamp, -1)
 
         Timber.d("Transcription for locators.count():" + locators.count())
 
@@ -1897,7 +1858,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         val indexRange = findLongestRun(matchedIndexs, 1)
         val hasLaterEntries =
-            locatorMap.keys.any { it > roundTimestampToNearest15Seconds(binding.timelinePosition.text.toString()) }
+            locatorMap.keys.any { it > roundDownToSlot(binding.timelinePosition.text.toString()) }
         if (indexRange.isNotEmpty()) {
             matchedLocators = if (!hasLaterEntries) {
                 locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
@@ -2056,7 +2017,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         val settingsScroll = navigator.settings.value.scroll
 
-        val nextSegment = getNext15SecondInterval(playbackTranscribeSegment, 1)
+        val nextSegment = offsetSlot(playbackTranscribeSegment, 1)
         val nextLocators = locatorMap.getOrDefault(nextSegment, listOf<Locator>())
 
         val matchedCount = matchedLocators?.count()
@@ -2293,7 +2254,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
 
             val currentTime =
-                roundTimestampToNearest15Seconds(playbackTranscribeSegment)
+                roundDownToSlot(playbackTranscribeSegment)
             locators.clear()
             locatorMap.entries.removeIf { it.key >= currentTime }
             currentNumberOfSegmentsListenedTo = 0
