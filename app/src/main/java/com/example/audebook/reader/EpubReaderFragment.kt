@@ -95,8 +95,8 @@ import kotlin.time.Duration
 import kotlin.time.DurationUnit
 
 import com.example.audebook.utils.AudioSegmentExtractor
-import com.example.audebook.utils.TranscriptMatcher
 import com.example.audebook.utils.SpeedRamp
+import com.example.audebook.utils.sync.SyncTracker
 import com.example.audebook.utils.TranscriptionPacing
 import com.example.audebook.utils.extensions.persistDocumentAccess
 import com.example.audebook.domain.Bookshelf
@@ -154,7 +154,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private var isSearchViewIconified = true
 
-    private lateinit var locators: MutableList<Locator>
 
     private lateinit var application: Application
 
@@ -185,6 +184,26 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private val locatorMap: MutableMap<String, List<Locator>> = mutableMapOf()
 
+    // Finds each transcribed slot in the book (see SyncTracker) and fills locatorMap
+    private var bookIndexer: BookIndexer? = null
+    private var syncTracker: SyncTracker<Locator>? = null
+
+    /** Finds [transcript] in the book and records what to highlight for [slot]. */
+    private fun placeSlot(slot: String, transcript: String) {
+        val tracker = syncTracker ?: return
+        val indexer = bookIndexer ?: return
+        val placement = tracker.place(convertTimestampToSeconds(slot), segmentLength, transcript) ?: return
+        locatorMap[slot] = indexer.locatorsFor(placement)
+        Timber.d("Slot $slot: ${placement.kind} at ${placement.start}")
+    }
+
+    /** Places every transcribed slot from [from] on (all if null), in time order. */
+    private fun placeTranscribedSlots(from: String? = null) {
+        transcriptionMap.keys.sorted()
+            .filter { from == null || it >= from }
+            .forEach { slot -> transcriptionMap[slot]?.let { placeSlot(slot, it) } }
+    }
+
     private var isLoadingInitTranscription: Boolean = false
 
     private lateinit var latestPlaybackStatus: TimeBasedMediaNavigator.Playback
@@ -192,7 +211,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private var isFollowingAudio: Boolean = true
     private var lastHighlightUpdate: Long = 0
 
-    lateinit var globalIterator: Content.Iterator
 
     lateinit var audioDialog: AudioPreferencesBottomSheetDialogFragment
 
@@ -207,16 +225,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private var prefetchedSegment: String? = null
     private var prefetchedWavPath: String? = null
 
-    // Serializes syncTranscriptionWithLocator, whose matching runs off the main thread
-    private val syncMutex = Mutex()
-
     var currentHighlight: List<Locator> = listOf<Locator>()
 
-    var currentNumberOfSegmentsListenedTo: Int = 0
-
     var lastColour: Int = Color.rgb(124, 198, 247)
-
-    lateinit var latestLocatorPosition: Locator
 
     var segmentLength: Int = 10
 
@@ -288,13 +299,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                                         ) {
                                             getNextTranscriptionSegment()
                                         }
-                                        if (locatorMap.count() <= 10) {
-                                            locatorMap[cachedCurrentTranscribeSegment] =
-                                                syncTranscriptionWithLocator(
-                                                    result,
-                                                    cachedCurrentTranscribeSegment
-                                                )
-                                        }
+                                        placeSlot(cachedCurrentTranscribeSegment, result)
                                         application.bookRepository.insertAudioBookTranscript(
                                             epubBookId,
                                             result,
@@ -316,7 +321,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         }
 
-        locators = mutableListOf()
 
         val readerData = model.readerInitData as? EpubReaderInitData ?: run {
             // We provide a dummy fragment factory  if the ReaderActivity is restored after the
@@ -329,6 +333,20 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         epubBookId = readerData.bookId
+
+        // Index the book's text for syncing: the chapter being read first, so Anchor is ready
+        // straight away, then the rest of the book in the background
+        val indexer = BookIndexer(readerData.publication)
+        bookIndexer = indexer
+        syncTracker = SyncTracker(indexer.index)
+        val startChapter = readerData.initialLocation?.let { indexer.chapterOf(it) } ?: 0
+        lifecycleScope.launch(Dispatchers.Default) {
+            indexer.indexChapter(startChapter)
+            // Place transcripts saved from earlier sessions; with no Anchor, the tracker finds
+            // where they are in the book by itself
+            withContext(Dispatchers.Main) { placeTranscribedSlots() }
+            indexer.indexOutwardsFrom(startChapter)
+        }
 
         lifecycleScope.launch {
             try {
@@ -529,10 +547,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         }
 
                         R.id.debugButton -> {
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                getCurrentVisibleContentRange()
-                                Timber.d("")
-                            }
+                            Timber.d(
+                                "Sync: anchored=${syncTracker?.isAnchored}, " +
+                                    "pace=${syncTracker?.wordsPerSecond}, " +
+                                    "indexed chapters=${bookIndexer?.index?.chapters()?.keys?.sorted()}, " +
+                                    "placed slots=${locatorMap.size}"
+                            )
 
                             return true
                         }
@@ -778,8 +798,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 application.bookRepository.deleteAudiobookTranscript(epubBookId)
             }
             transcriptionMap.clear()
-            locators.clear()
             locatorMap.clear()
+            // The next audiobook has its own timeline
+            syncTracker?.reset()
             sharedStoragePickerLauncher.launch(arrayOf("*/*"))
             binding.loadAudioBook.visibility = View.VISIBLE
 
@@ -850,12 +871,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         )
                     }
                 }
-            } else if (locatorMap.any()) {
-                model.viewModelScope.launch {
-                    forceLocatorSync(playbackTranscribeSegment)
-                }
-
-                Timber.d("Transcription for no LocatorMap found")
+            } else {
+                // Transcribed but not placed yet, e.g. it arrived before its chapter was indexed
+                transcriptionMap[playbackTranscribeSegment]?.let { placeSlot(playbackTranscribeSegment, it) }
             }
         }
 
@@ -1637,191 +1655,31 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
     }
 
-    suspend fun getCurrentVisibleContentRange(full: Boolean = false) {
-        // Display page number labels if the book contains a `page-list` navigation document.
-
-        val currentEpubProgress = navigator.currentLocator.value.locations.totalProgression
-        val currentAudioProgression = audioNavigator.currentLocator.value.locations.totalProgression
-
-        if (!::globalIterator.isInitialized) {
-            globalIterator =
-                publication.content((navigator as? VisualNavigator)?.firstVisibleElementLocator())!!
-                    .iterator()
-            if (currentEpubProgress != null && currentAudioProgression != null) {
-                if (currentEpubProgress - currentAudioProgression >= 0.2) {
-                    globalIterator = publication.content()!!.iterator()
-                }
-            }
-        }
-
-        val progressionRange = if (full) {
-            -0.10..0.10
-        } else {
-            -0.03..0.03
-        }
-
-        val tokenizer = DefaultTextContentTokenizer(
-            unit = TextUnit.Word,
-            language = Language(Locale.ENGLISH)
-        )
-
-        var i = 0
-
-        while (globalIterator.hasNext()) {
-            try {
-                val element = globalIterator.next()
-
-                val string = element.locator.text.highlight.toString()
-                val tokenizedContent = mergeRanges(tokenizer.tokenize(string), 20)
-
-                if ((i >= 15 || locators.count() >= 90) && full) {
-                    break
-                }
-
-                var j = 0
-
-                for (range in tokenizedContent) {
-                    if (j <= 200)
-                        addLocator(element.locator, string, range)
-                    j++
-                }
-
-                val progression = element.locator.locations.totalProgression
-
-                if (progression != null && currentAudioProgression != null) {
-                    Timber.d("Transcription for: " + progression)
-                    // Calculate the difference between locator progression and currentAudioProgression
-                    val difference = progression - currentAudioProgression
-
-                    // Check if the difference is within 5% of currentAudioProgression
-                }
-
-            } catch (e: Exception) {
-                Timber.d("Transcription for catching has next: " + i)
-            }
-            i++
-        }
-
-        Timber.d("Transcription for: " + locators.toString())
-
-    }
-
-    private fun addLocator(element: Locator, string: String, range: IntRange) {
-        val contextSnippetLength = 50
-
-        val after = string.substring(
-            range.last,
-            (range.last + contextSnippetLength).coerceAtMost(string.length)
-        )
-        val before = string.substring(
-            (range.first - contextSnippetLength).coerceAtLeast(0),
-            range.first
-        )
-        val subLocator = Locator.Text(
-            after = after.takeIf { it.isNotEmpty() },
-            before = before.takeIf { it.isNotEmpty() },
-            highlight = string.substring(range)
-        )
-
-        Timber.d("Transcription for addLocator: " + element)
-        locators.add(element.copy(text = subLocator))
-    }
-
-    fun mergeRanges(ranges: List<IntRange>, minSize: Int = 50): List<IntRange> {
-        if (ranges.isEmpty()) return emptyList()
-
-        val sortedRanges = ranges.sortedBy { it.first }
-        val mergedRanges = mutableListOf<IntRange>()
-        var currentRange = sortedRanges.first()
-
-        for (range in sortedRanges.drop(1)) {
-            if (range.first <= currentRange.last + 1) {
-                currentRange = currentRange.first..maxOf(currentRange.last, range.last)
-            } else {
-                mergedRanges.add(currentRange)
-                currentRange = range
-            }
-        }
-        mergedRanges.add(currentRange)
-
-        // Ensure each resulting range has a minimum size of 50
-        val finalRanges = mutableListOf<IntRange>()
-        var combinedRange: IntRange? = null
-
-        for (range in mergedRanges) {
-            if (range.last - range.first + 1 >= minSize) {
-                if (combinedRange != null) {
-                    finalRanges.add(combinedRange.first..range.last)
-                    combinedRange = null
-                } else {
-                    finalRanges.add(range)
-                }
-            } else {
-                if (combinedRange == null) {
-                    combinedRange = range
-                } else {
-                    combinedRange = combinedRange.first..range.last
-                    if (combinedRange.last - combinedRange.first + 1 >= minSize) {
-                        finalRanges.add(combinedRange)
-                        combinedRange = null
-                    }
-                }
-            }
-        }
-
-        if (combinedRange != null) {
-            if (finalRanges.isNotEmpty() && combinedRange.last - combinedRange.first + 1 < minSize) {
-                val lastRange = finalRanges.removeAt(finalRanges.size - 1)
-                finalRanges.add(lastRange.first..combinedRange.last)
-            } else {
-                finalRanges.add(combinedRange)
-            }
-        }
-
-        return finalRanges
-    }
-
     fun onReanchorTranscriptionLocator(@Suppress("UNUSED_PARAMETER") view: View) {
         audioNavigator.pause()
-        locatorSyncingFlag = false
 
         model.viewModelScope.launch {
-            locators.clear()
             locatorMap.clear()
             binding.loadingOverlay.visibility = View.VISIBLE
-            val firstLocator = (navigator as? VisualNavigator)?.firstVisibleElementLocator()!!
-            Timber.d("Transcription for firstVisibleElementLocator() ${firstLocator.text.highlight}")
+            val playbackTime = binding.timelinePosition.text.toString()
+            val currentTime = roundDownToSlot(playbackTime)
 
-            latestLocatorPosition = firstLocator
-
-            globalIterator = publication.content(firstLocator)!!.iterator()
-
-            try {
-
-                if (globalIterator.hasPrevious())
-                    globalIterator.previous().locator
-
-                if (globalIterator.hasPrevious())
-                    globalIterator.previous().locator
-
-            } catch (e: Exception) {
-
-            }
-
-            getCurrentVisibleContentRange(true)
-
-            val currentTime =
-                roundDownToSlot(binding.timelinePosition.text.toString())
-
-            // Iterate over transcriptionMap and update locatorMap
-
-            // Filter transcriptionMap to include only entries on or after currentTime
-            transcriptionMap.filterKeys { it >= currentTime }
-                .forEach { (transcriptionTimestamp, result) ->
-                    locatorMap[transcriptionTimestamp] =
-                        syncTranscriptionWithLocator(result, transcriptionTimestamp)
-                    Timber.d("Transcription For Reanchor: $transcriptionTimestamp")
+            // Tell the tracker the narrator is at the first visible paragraph right now
+            val firstLocator = (navigator as? VisualNavigator)?.firstVisibleElementLocator()
+            val indexer = bookIndexer
+            val tracker = syncTracker
+            if (firstLocator != null && indexer != null && tracker != null) {
+                // Normally indexed already, when the book opened; if not, this takes well under a second
+                indexer.chapterOf(firstLocator)?.let { chapter ->
+                    withContext(Dispatchers.Default) { indexer.indexChapter(chapter) }
                 }
+                val position = indexer.positionOf(firstLocator)
+                if (position != null) {
+                    tracker.anchor(convertTimestampToSeconds(playbackTime), position)
+                    Timber.d("Anchored $playbackTime at $position")
+                }
+                placeTranscribedSlots(from = currentTime)
+            }
 
             loadThenPlayStart(
                 generateTranscriptionRanges(
@@ -1853,172 +1711,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         animator.start()
     }
 
-    private var syncTranscriptionWithLocatorSyncingFlag = false
-
-    /**
-     * Matches a slot's transcript against the EPUB chunks in [locators]. Calls are serialized so
-     * one sync can't consume chunks while another is still matching against them.
-     */
-    suspend fun syncTranscriptionWithLocator(
-        transcription: String,
-        timestamp: String
-    ): List<Locator> = syncMutex.withLock {
-        matchTranscriptionToLocators(transcription, timestamp)
-    }
-
-    private suspend fun matchTranscriptionToLocators(
-        transcription: String,
-        timestamp: String
-    ): List<Locator> {
-
-        val startTimeGetContent = System.currentTimeMillis()
-
-        if (locators.isEmpty())
-            getCurrentVisibleContentRange(true)
-        var matchedLocators = mutableListOf<Locator>()
-        val matchedDebugTest = mutableListOf<String>()
-        val matchedIndexs = mutableListOf<Int>()
-
-        val prevSegment = offsetSlot(timestamp, -1)
-
-        Timber.d("Transcription for locators.count():" + locators.count())
-
-        if (locators.count() <= 31)
-            getCurrentVisibleContentRange(true)
-
-        var locatorSlice = if (locatorMap.isEmpty()) {
-            locators
-        } else {
-
-            val endIndex = if (locators.count() < 30) locators.count() - 1 else 30
-            if (endIndex >= 0) locators.slice(0..endIndex) else emptyList()
-        }
-
-        // The fuzzy matching is the expensive part, so run it on a background thread against a
-        // snapshot. locatorSlice is a prefix of locators, so its indices are locators indices.
-        val snapshot = locators.toList()
-        val chunkTexts = locatorSlice.map { it.text.highlight.toString() }
-        matchedIndexs.addAll(withContext(Dispatchers.Default) {
-            TranscriptMatcher.findMatchingChunks(chunkTexts, transcription)
-        })
-
-        // Anchor, a forced re-sync or the end of playback can rebuild locators on the main
-        // thread while matching runs. If so, the indices no longer apply; report no match and
-        // let the normal re-sync path pick it up.
-        if (locators.size < snapshot.size || snapshot.indices.any { locators[it] !== snapshot[it] }) {
-            Timber.d("Chunk list changed during matching; dropping result for $timestamp")
-            return emptyList()
-        }
-
-        val indexRange = findLongestRun(matchedIndexs, 1)
-        val hasLaterEntries =
-            locatorMap.keys.any { it > roundDownToSlot(binding.timelinePosition.text.toString()) }
-        if (indexRange.isNotEmpty()) {
-            matchedLocators = if (!hasLaterEntries) {
-                locators.slice(indexRange.first()..indexRange.last()) as MutableList<Locator>
-            } else {
-                locators.slice(0..indexRange.last()) as MutableList<Locator>
-            }
-
-            // Remove locators from matchedLocators that are in locatorMap[prevSegment]
-
-            locators.subList(0, indexRange.last()).clear()
-
-        } else {
-            matchedLocators.clear()
-        }
-
-        Timber.d("Transcription for time taken to transcribe: " + (System.currentTimeMillis() - startTimeGetContent))
-
-        return matchedLocators
-    }
-
-    fun findLongestRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
-        if (indices.isEmpty()) return emptyList()
-
-        val sortedIndices = indices.sorted()
-        var longestRun = mutableListOf<Int>()
-        var currentRun = mutableListOf<Int>()
-
-        for (i in sortedIndices.indices) {
-            if (currentRun.isEmpty() || sortedIndices[i] - currentRun.last() <= marginOfError) {
-                currentRun.add(sortedIndices[i])
-            } else {
-                if (currentRun.size > longestRun.size) {
-                    longestRun = currentRun
-                }
-                currentRun = mutableListOf(sortedIndices[i])
-            }
-        }
-
-        if (currentRun.size > longestRun.size) {
-            longestRun = currentRun
-        }
-
-        // Fill in any gaps within the margin of error
-        val filledRun = mutableListOf<Int>()
-        for (i in longestRun.indices) {
-            filledRun.add(longestRun[i])
-            if (i < longestRun.size - 1) {
-                val gap = longestRun[i + 1] - longestRun[i]
-                if (gap > 1 && gap <= marginOfError + 1) {
-                    for (j in 1 until gap) {
-                        filledRun.add(longestRun[i] + j)
-                    }
-                }
-            }
-        }
-
-        // Ensure the filled run is sorted and contains no duplicates
-        return filledRun.distinct().sorted()
-    }
-
-    fun findFirstRun(indices: List<Int>, marginOfError: Int = 1): List<Int> {
-        if (indices.isEmpty()) return emptyList()
-
-        val sortedIndices = indices.sorted()
-        val firstRun = mutableListOf<Int>()
-
-        // Start with the first index
-        firstRun.add(sortedIndices[0])
-
-        // Iterate through the sorted indices and fill gaps within the margin of error
-        for (i in 1 until sortedIndices.size) {
-            val previousIndex = firstRun.last()
-            val currentIndex = sortedIndices[i]
-
-            if (currentIndex - previousIndex <= marginOfError + 1) {
-                // Add the current index to the run if it's within the margin of error
-                firstRun.add(currentIndex)
-            } else {
-                // Stop as soon as the first run ends
-                break
-            }
-        }
-
-        // Fill in any gaps within the margin of error
-        val filledRun = mutableListOf<Int>()
-        for (i in firstRun.indices) {
-            filledRun.add(firstRun[i])
-            if (i < firstRun.size - 1) {
-                val gap = firstRun[i + 1] - firstRun[i]
-                if (gap > 1 && gap <= marginOfError + 1) {
-                    for (j in 1 until gap) {
-                        filledRun.add(firstRun[i] + j)
-                    }
-                }
-            }
-        }
-
-        // Ensure the filled run is sorted and contains no duplicates
-        return filledRun.distinct().sorted()
-    }
-
     suspend fun loadThenPlayStart(timestamps: List<String>) {
         binding.loadingOverlay.visibility = View.VISIBLE
         audioNavigator.pause()
-        if (locators.isEmpty())
-            getCurrentVisibleContentRange()
         Timber.d("Transcription for loadThenPlayStart")
         // The user is waiting on the overlay, so trade some battery for speed until playback
         // starts, then drop back to the low-power default for steady transcription
@@ -2074,8 +1769,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         val nextSegment = offsetSlot(playbackTranscribeSegment, 1)
         val nextLocators = locatorMap.getOrDefault(nextSegment, listOf<Locator>())
 
-        val matchedCount = matchedLocators?.count()
-
         matchedLocators?.isEmpty()?.let {
             if (!it) {
 
@@ -2111,20 +1804,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     navigator.go(pageLocator, true)
                 }
 
-                // CALCULATE SPEED FROM PROGRESSIONNNNNNNN
-
-                var updatedMatchedLocators = matchedLocators
-
-                if (prevLocators != null && prevLocators.size >= 2) {
-                    updatedMatchedLocators = (prevLocators.takeLast(2) + matchedLocators).distinct()
-                }
-
-                if (!updatedMatchedLocators.isEmpty())
-                    latestLocatorPosition = updatedMatchedLocators[0]
+                // Placements are exact now, so the previous slot's text isn't added to the
+                // current highlight any more (it used to smooth over loose chunk matches)
+                val updatedMatchedLocators = matchedLocators
 
                 if (currentHighlight != updatedMatchedLocators) {
                     currentHighlight = updatedMatchedLocators
-                    currentNumberOfSegmentsListenedTo++
 
                     val random = Random.Default
 
@@ -2166,27 +1851,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         decorations + decorations2,
                         "tts"
                     )
-
-                    if (currentNumberOfSegmentsListenedTo >= 6) {
-
-                        forceLocatorSync(playbackTranscribeSegment)
-
-                    }
                 }
-                // Concatenate locator.text.highlight into one string separated by spaces
-
             }
         }
-
-        if (matchedCount != null) {
-            if (matchedCount <= 2) {
-                forceLocatorSync(playbackTranscribeSegment)
-            }
-        }
-        if (matchedCount == null) {
-            forceLocatorSync(playbackTranscribeSegment)
-        }
-
     }
 
     private fun findAllWebViews(
@@ -2296,38 +1963,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         webViewScrollJob?.cancel()
         webViewScrollJob = null
     }
-
-    suspend fun forceLocatorSync(playbackTranscribeSegment: String) {
-        if (locatorSyncingFlag == false) {
-            locatorSyncingFlag = true
-
-            // Launch a coroutine to reset the flag after 4 seconds
-            viewLifecycleOwner.lifecycleScope.launch {
-                delay(4000) // 4 seconds
-                locatorSyncingFlag = false
-            }
-
-            val currentTime =
-                roundDownToSlot(playbackTranscribeSegment)
-            locators.clear()
-            locatorMap.entries.removeIf { it.key >= currentTime }
-            currentNumberOfSegmentsListenedTo = 0
-            globalIterator =
-                publication.content(latestLocatorPosition)!!
-                    .iterator()
-
-            getCurrentVisibleContentRange(true)
-
-            transcriptionMap.filterKeys { it >= currentTime }
-                .forEach { (transcriptionTimestamp, result) ->
-                    locatorMap[transcriptionTimestamp] =
-                        syncTranscriptionWithLocator(result, transcriptionTimestamp)
-                }
-
-        }
-    }
-
-    private var locatorSyncingFlag = false
 
 }
 
