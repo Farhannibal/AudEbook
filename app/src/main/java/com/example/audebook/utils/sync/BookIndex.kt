@@ -38,6 +38,10 @@ class BookIndex<E> {
             return IntArray(low - from) { (trigrams[from + it] and 0xFFFFFFFFL).toInt() }
         }
 
+        /** How many characters word [word] has in the book's text. */
+        fun wordCharCount(word: Int): Int =
+            if (word in 0 until wordCount) wordCharEnd[word] - wordCharStart[word] else 0
+
         /** The first word of element [elementIndex], or null if that element has no words. */
         fun firstWordOf(elementIndex: Int): Int? {
             val word = wordElement.indexOfFirst { it >= elementIndex }

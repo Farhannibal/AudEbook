@@ -16,6 +16,7 @@ import android.graphics.drawable.AnimatedVectorDrawable
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.text.format.DateUtils
 import android.view.*
@@ -96,7 +97,9 @@ import kotlin.time.DurationUnit
 
 import com.example.audebook.utils.AudioSegmentExtractor
 import com.example.audebook.utils.SpeedRamp
+import com.example.audebook.utils.sync.BookPosition
 import com.example.audebook.utils.sync.SyncTracker
+import com.example.audebook.utils.sync.WordCursor
 import com.example.audebook.utils.TranscriptionPacing
 import com.example.audebook.utils.extensions.persistDocumentAccess
 import com.example.audebook.domain.Bookshelf
@@ -188,13 +191,33 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private var bookIndexer: BookIndexer? = null
     private var syncTracker: SyncTracker<Locator>? = null
 
+    // Where each slot was found in the book; locatorMap holds the highlights built from these
+    private val placements: MutableMap<String, SyncTracker.Placement> = mutableMapOf()
+
     /** Finds [transcript] in the book and records what to highlight for [slot]. */
     private fun placeSlot(slot: String, transcript: String) {
         val tracker = syncTracker ?: return
-        val indexer = bookIndexer ?: return
         val placement = tracker.place(convertTimestampToSeconds(slot), segmentLength, transcript) ?: return
-        locatorMap[slot] = indexer.locatorsFor(placement)
+        placements[slot] = placement
+        // This slot's highlight runs up to the next slot, and the previous one now runs up to this
+        refreshSlotHighlight(slot)
+        refreshSlotHighlight(offsetSlot(slot, -1))
         Timber.d("Slot $slot: ${placement.kind} at ${placement.start}")
+    }
+
+    /** Rebuilds [slot]'s highlight so it meets the next slot's (see WordCursor.contiguousEnd). */
+    private fun refreshSlotHighlight(slot: String) {
+        val indexer = bookIndexer ?: return
+        val placement = placements[slot] ?: return
+        val end = WordCursor.contiguousEnd(placement, placements[offsetSlot(slot, 1)])
+        locatorMap[slot] = indexer.locatorsFor(placement.copy(endWord = end))
+    }
+
+    /** Forgets every slot's placement and highlight, e.g. on Anchor. */
+    private fun clearPlacements() {
+        placements.clear()
+        locatorMap.clear()
+        lastCursorWord = null
     }
 
     /** Places every transcribed slot from [from] on (all if null), in time order. */
@@ -685,6 +708,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         // Fastest setting measured on a Galaxy S24+; 8 threads was slower than 4
         private const val ANCHOR_WHISPER_THREADS = 4
 
+        // Word cursor: its own decoration group so moving it doesn't redraw the slot highlights,
+        // a warm colour that stands out from the blue and teal slot highlights, and how often it
+        // is moved (several times a second, so it keeps up even at 5x)
+        private const val WORD_CURSOR_GROUP = "tts-word"
+        private val WORD_CURSOR_COLOR = Color.rgb(255, 183, 77)
+        private const val WORD_CURSOR_INTERVAL_MS = 120L
+
         // Recent Whisper times averaged when choosing a thread count (see TranscriptionPacing)
         private const val SLOT_TIME_WINDOW = 3
 
@@ -784,6 +814,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     ) {
         Timber.v("onPlaybackChanged $playback")
         latestPlaybackStatus = playback
+        // For the word cursor, which estimates the position between these updates
+        playbackOffsetMs = playback.offset.inWholeMilliseconds
+        playbackOffsetAt = SystemClock.elapsedRealtime()
         val failureState = playback.state as? AudioNavigator.State.Failure<*>
         val endedState = playback.state as? AudioNavigator.State.Ended
         if (failureState != null) {
@@ -798,7 +831,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 application.bookRepository.deleteAudiobookTranscript(epubBookId)
             }
             transcriptionMap.clear()
-            locatorMap.clear()
+            clearPlacements()
             // The next audiobook has its own timeline
             syncTracker?.reset()
             sharedStoragePickerLauncher.launch(arrayOf("*/*"))
@@ -811,8 +844,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         // button, Anchor, or a headset or notification control)
         if (playback.playWhenReady && !wasPlaying) {
             startSpeedRamp()
+            startWordCursor()
         } else if (!playback.playWhenReady && wasPlaying) {
             speedRampJob?.cancel()
+            // The cursor stays on the last word while paused
+            stopWordCursor()
         }
         wasPlaying = playback.playWhenReady
 
@@ -1075,6 +1111,60 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 delay(SpeedRamp.STEP_INTERVAL_MS)
             }
         }
+    }
+
+    // Word cursor: a small highlight on the word being spoken, estimated from how far playback is
+    // into its slot (see WordCursor.wordAt). Playback position updates arrive irregularly, so the
+    // position is extrapolated from the last one.
+    private var wordCursorJob: Job? = null
+    private var lastCursorWord: BookPosition? = null
+    private var playbackOffsetMs = 0L
+    private var playbackOffsetAt = 0L
+
+    private fun startWordCursor() {
+        wordCursorJob?.cancel()
+        wordCursorJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (isActive) {
+                updateWordCursor()
+                delay(WORD_CURSOR_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun stopWordCursor() {
+        wordCursorJob?.cancel()
+        wordCursorJob = null
+    }
+
+    private suspend fun updateWordCursor() {
+        val indexer = bookIndexer ?: return
+        val sinceUpdate = if (isPlaying()) SystemClock.elapsedRealtime() - playbackOffsetAt else 0L
+        val positionMs = playbackOffsetMs + (sinceUpdate * playbackSpeed()).toLong()
+        val slotSeconds = (positionMs / 1000 / segmentLength) * segmentLength
+        val slot = offsetSlot("00:00:00", (slotSeconds / segmentLength).toInt())
+
+        val placement = placements[slot]
+        if (placement == null) {
+            // Not placed yet (e.g. still transcribing): hide the cursor rather than show a stale word
+            if (lastCursorWord != null) {
+                lastCursorWord = null
+                navigator.applyDecorations(emptyList(), WORD_CURSOR_GROUP)
+            }
+            return
+        }
+        val chapter = indexer.index.chapter(placement.start.chapter) ?: return
+        val end = WordCursor.contiguousEnd(placement, placements[offsetSlot(slot, 1)])
+        val fraction = (positionMs - slotSeconds * 1000.0) / (segmentLength * 1000.0)
+        val word = WordCursor.wordAt(fraction, placement.start.word, end) { chapter.wordCharCount(it) }
+        val position = BookPosition(placement.start.chapter, word)
+        if (position == lastCursorWord) return
+        lastCursorWord = position
+
+        val locator = indexer.locatorsFor(placement.copy(start = position, endWord = word)).firstOrNull() ?: return
+        navigator.applyDecorations(
+            listOf(Decoration(id = WORD_CURSOR_GROUP, locator = locator, style = Decoration.Style.Highlight(tint = WORD_CURSOR_COLOR))),
+            WORD_CURSOR_GROUP
+        )
     }
 
     // Applied playback speed, which the settings dialog doesn't report until it is changed
@@ -1659,7 +1749,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         audioNavigator.pause()
 
         model.viewModelScope.launch {
-            locatorMap.clear()
+            clearPlacements()
             binding.loadingOverlay.visibility = View.VISIBLE
             val playbackTime = binding.timelinePosition.text.toString()
             val currentTime = roundDownToSlot(playbackTime)
