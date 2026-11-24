@@ -79,7 +79,7 @@ We thank all the maintainers and contributors of these excellent open-source pro
 <string name="acknowledgements_whisper">• OpenAI Whisper (tiny.en, MIT license) - Speech recognition model</string>
 
 <string name="acknowledgements_ml_header"><b>Machine Learning:</b></string>
-<string name="acknowledgements_tensorflow">• TensorFlow Lite - On-device speech recognition and ML inference</string>
+<string name="acknowledgements_tensorflow">• LiteRT (TensorFlow Lite) - On-device speech recognition</string>
 
 <string name="acknowledgements_android_header"><b>Android Framework:</b></string>
 <string name="acknowledgements_androidx">• AndroidX Libraries - Core Android components</string>

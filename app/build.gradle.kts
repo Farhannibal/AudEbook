@@ -128,12 +128,13 @@ dependencies {
     // Only required if you want to support audiobooks using ExoPlayer.
     implementation("org.readium.kotlin-toolkit:readium-adapter-exoplayer:3.0.3")
     implementation("org.readium.kotlin-toolkit:readium-opds:3.0.3")
-    // Only required if you want to support PDF files using PDFium.
-    implementation("org.readium.kotlin-toolkit:readium-adapter-pdfium:3.0.3")
 
-    // Main TensorFlow Lite library
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // LiteRT is TensorFlow Lite under its new name, with the same org.tensorflow.lite API.
+    // Unlike TensorFlow Lite 2.14, its native library supports 16 KB memory pages.
+    implementation("com.google.ai.edge.litert:litert:1.4.2")
+    implementation("com.google.ai.edge.litert:litert-support:1.4.2")
+    // Pulled in by Compose; this version's native library supports 16 KB memory pages
+    implementation("androidx.graphics:graphics-path:1.1.0")
 
 
     implementation("info.debatty:java-string-similarity:2.0.0")

@@ -91,7 +91,6 @@ open class ReaderActivity : AppCompatActivity() {
             is EpubReaderInitData -> EpubReaderFragment::class.java
             is ImageReaderInitData -> ImageReaderFragment::class.java
             is MediaReaderInitData -> AudioReaderFragment::class.java
-            is PdfReaderInitData -> PdfReaderFragment::class.java
             is DummyReaderInitData -> null
         }
 

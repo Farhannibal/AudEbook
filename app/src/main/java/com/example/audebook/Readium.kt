@@ -7,7 +7,6 @@
 package com.example.audebook
 
 import android.content.Context
-import org.readium.adapter.pdfium.document.PdfiumDocumentFactory
 import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.util.asset.AssetRetriever
@@ -34,8 +33,7 @@ class Readium(context: Context) {
             context,
             assetRetriever = assetRetriever,
             httpClient = httpClient,
-            // Only required if you want to support PDF files using the PDFium adapter.
-            pdfFactory = PdfiumDocumentFactory(context)
+            pdfFactory = null
         ),
         contentProtections = emptyList()
     )

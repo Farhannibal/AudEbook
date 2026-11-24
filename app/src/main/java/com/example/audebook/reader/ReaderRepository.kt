@@ -11,11 +11,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences as JetpackPreferences
 import org.json.JSONObject
 import org.readium.adapter.exoplayer.audio.ExoPlayerEngineProvider
-import org.readium.adapter.pdfium.navigator.PdfiumEngineProvider
 import org.readium.navigator.media.audio.AudioNavigatorFactory
 import org.readium.navigator.media.tts.TtsNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
-import org.readium.r2.navigator.pdf.PdfNavigatorFactory
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
@@ -31,7 +29,6 @@ import com.example.audebook.domain.PublicationError
 import com.example.audebook.reader.preferences.AndroidTtsPreferencesManagerFactory
 import com.example.audebook.reader.preferences.EpubPreferencesManagerFactory
 import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
-import com.example.audebook.reader.preferences.PdfiumPreferencesManagerFactory
 import com.example.audebook.utils.CoroutineQueue
 import timber.log.Timber
 
@@ -117,8 +114,6 @@ class ReaderRepository(
                 openAudio(bookId, publication, initialLocator)
             publication.conformsTo(Publication.Profile.EPUB) || publication.readingOrder.allAreHtml ->
                 openEpub(bookId, publication, initialLocator)
-//            publication.conformsTo(Publication.Profile.PDF) ->
-//                openPdf(bookId, publication, initialLocator)
 //            publication.conformsTo(Publication.Profile.DIVINA) ->
 //                openImage(bookId, publication, initialLocator)
             else ->
@@ -191,28 +186,6 @@ class ReaderRepository(
         val ttsInitData = getTtsInitData(bookId, publication)
 
         val initData = EpubReaderInitData(
-            bookId,
-            publication,
-            initialLocator,
-            preferencesManager,
-            navigatorFactory,
-            ttsInitData
-        )
-        return Try.success(initData)
-    }
-
-    private suspend fun openPdf(
-        bookId: Long,
-        publication: Publication,
-        initialLocator: Locator?
-    ): Try<PdfReaderInitData, OpeningError> {
-        val preferencesManager = PdfiumPreferencesManagerFactory(preferencesDataStore)
-            .createPreferenceManager(bookId)
-        val pdfEngine = PdfiumEngineProvider()
-        val navigatorFactory = PdfNavigatorFactory(publication, pdfEngine)
-        val ttsInitData = getTtsInitData(bookId, publication)
-
-        val initData = PdfReaderInitData(
             bookId,
             publication,
             initialLocator,

@@ -16,8 +16,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
 import org.readium.adapter.exoplayer.audio.ExoPlayerSettings
-import org.readium.adapter.pdfium.navigator.PdfiumPreferences
-import org.readium.adapter.pdfium.navigator.PdfiumSettings
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.epub.EpubSettings
 import org.readium.r2.navigator.preferences.Configurable
@@ -67,14 +65,6 @@ class UserPreferencesViewModel<S : Configurable.Settings, P : Configurable.Prefe
             when (readerInitData) {
                 is EpubReaderInitData -> with(readerInitData) {
                     UserPreferencesViewModel<EpubSettings, EpubPreferences>(
-                        viewModelScope,
-                        bookId,
-                        preferencesManager,
-                        createPreferencesEditor = navigatorFactory::createPreferencesEditor
-                    )
-                }
-                is PdfReaderInitData -> with(readerInitData) {
-                    UserPreferencesViewModel<PdfiumSettings, PdfiumPreferences>(
                         viewModelScope,
                         bookId,
                         preferencesManager,

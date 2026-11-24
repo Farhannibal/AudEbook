@@ -90,8 +90,6 @@
                 <data android:mimeType="application/epub+zip" />
                 <!-- LPF -->
                 <data android:mimeType="application/lpf+zip" />
-                <!-- PDF -->
-                <data android:mimeType="application/pdf" />
                 <!-- WebPub (Readium) -->
                 <data android:mimeType="application/webpub+zip" />
                 <data android:mimeType="application/webpub+json" />
@@ -125,8 +123,6 @@
                 <data android:mimeType="application/epub+zip" />
                 <!-- LPF -->
                 <data android:mimeType="application/lpf+zip" />
-                <!-- PDF -->
-                <data android:mimeType="application/pdf" />
                 <!-- WebPub (Readium) -->
                 <data android:mimeType="application/webpub+zip" />
                 <data android:mimeType="application/webpub+json" />
@@ -159,8 +155,6 @@
                 <data android:pathPattern=".*\\.EPUB" />
                 <data android:pathPattern=".*\\.lpf" />
                 <data android:pathPattern=".*\\.LPF" />
-                <data android:pathPattern=".*\\.pdf" />
-                <data android:pathPattern=".*\\.PDF" />
                 <data android:pathPattern=".*\\.webpub" />
                 <data android:pathPattern=".*\\.WEBPUB" />
                 <data android:pathPattern=".*\\.zab" />

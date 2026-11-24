@@ -21,10 +21,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferencesSerializer
-import org.readium.adapter.pdfium.navigator.PdfiumPreferences
-import org.readium.adapter.pdfium.navigator.PdfiumPreferencesSerializer
-import org.readium.adapter.pdfium.navigator.PdfiumPublicationPreferencesFilter
-import org.readium.adapter.pdfium.navigator.PdfiumSharedPreferencesFilter
 import org.readium.navigator.media.tts.android.AndroidTtsPreferences
 import org.readium.navigator.media.tts.android.AndroidTtsPreferencesSerializer
 import org.readium.navigator.media.tts.android.AndroidTtsPublicationPreferencesFilter
@@ -129,17 +125,6 @@ class EpubPreferencesManagerFactory(
     emptyPreferences = EpubPreferences(),
     // Dark, and scrolling rather than paginated, which suits following the highlight
     defaultPreferences = EpubPreferences(theme = Theme.DARK, scroll = true)
-)
-
-class PdfiumPreferencesManagerFactory(
-    dataStore: DataStore<Preferences>
-) : PreferencesManagerFactory<PdfiumPreferences>(
-    dataStore = dataStore,
-    klass = PdfiumPreferences::class,
-    sharedPreferencesFilter = PdfiumSharedPreferencesFilter,
-    publicationPreferencesFilter = PdfiumPublicationPreferencesFilter,
-    preferencesSerializer = PdfiumPreferencesSerializer(),
-    emptyPreferences = PdfiumPreferences()
 )
 
 class ExoPlayerPreferencesManagerFactory(
