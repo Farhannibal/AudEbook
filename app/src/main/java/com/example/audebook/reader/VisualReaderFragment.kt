@@ -70,6 +70,7 @@ import org.readium.r2.navigator.util.DirectionalNavigationAdapter
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.util.Language
+import com.example.audebook.BuildConfig
 import com.example.audebook.R
 import com.example.audebook.data.model.Highlight
 import com.example.audebook.databinding.FragmentReaderBinding
@@ -171,7 +172,8 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
         menuHost.addMenuProvider(
             object : MenuProvider {
                 override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-                    menu.findItem(R.id.tts).isVisible = (model.tts != null)
+                    // Read-aloud fights with the audiobook sync, so it's only offered in debug builds
+                    menu.findItem(R.id.tts).isVisible = BuildConfig.DEBUG && model.tts != null
                 }
 
                 override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
