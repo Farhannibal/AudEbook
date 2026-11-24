@@ -45,8 +45,7 @@ public class WaveUtil {
     }
 
     public static float[] getSamples(String filePath) {
-        try {
-            FileInputStream fileInputStream = new FileInputStream(filePath);
+        try (FileInputStream fileInputStream = new FileInputStream(filePath)) {
             Log.d(TAG, "getSamples " + filePath);
 
             // Read the WAV file header
