@@ -9,6 +9,7 @@ package com.example.audebook.reader
 import android.os.Build
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -43,6 +44,17 @@ open class ReaderActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityReaderBinding
     private lateinit var readerFragment: BaseReaderFragment
+
+    /**
+     * Sees every touch before the views do, including the book's WebViews, which don't pass
+     * touches on to the views behind them. The EPUB reader uses it to notice the reader scrolling.
+     */
+    var onAnyTouch: ((MotionEvent) -> Unit)? = null
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        onAnyTouch?.invoke(ev)
+        return super.dispatchTouchEvent(ev)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
