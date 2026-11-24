@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
 
     id("com.google.devtools.ksp") version "2.1.0-1.0.29" apply false
+    id("com.google.android.gms.oss-licenses-plugin") version "0.10.6" apply false
 
 //    alias(libs.plugins.dokka)
 //    alias(libs.plugins.ktlint)

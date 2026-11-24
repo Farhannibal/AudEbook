@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
 //    alias(libs.plugins.android.application)
 ////    alias(libs.plugins.android.library)
@@ -31,13 +33,34 @@ android {
     compileSdk = 35
 
     defaultConfig {
-//        applicationId = "com.example.audebook"
+        applicationId = "com.farhannibal.audebook"
         minSdk = 26
         targetSdk = 35
-//        versionCode = 1
-//        versionName = "1.0"
+        versionCode = 1
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Release signing comes from keystore.properties in the project root, which stays out of git:
+    //   storeFile=C:/path/to/upload-keystore.jks
+    //   storePassword=...
+    //   keyAlias=upload
+    //   keyPassword=...
+    // Without it, release builds are left unsigned.
+    val keystoreFile = rootProject.file("keystore.properties")
+    val keystore = Properties().apply {
+        if (keystoreFile.exists()) keystoreFile.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (keystoreFile.exists()) {
+            create("upload") {
+                storeFile = file(keystore.getProperty("storeFile"))
+                storePassword = keystore.getProperty("storePassword")
+                keyAlias = keystore.getProperty("keyAlias")
+                keyPassword = keystore.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -48,6 +71,7 @@ android {
         release {
             // 64-bit ARM phones only; older 32-bit phones are too slow to keep up with Whisper
             ndk { abiFilters += listOf("arm64-v8a") }
+            signingConfigs.findByName("upload")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -77,6 +101,10 @@ android {
     }
 }
 
+// Collects the licenses of every dependency for the About screen. Applied here, after android {},
+// because it needs the Android plugin's extension to exist already
+apply(plugin = "com.google.android.gms.oss-licenses-plugin")
+
 dependencies {
 
 //    coreLibraryDesugaring(libs.desugar.jdk.libs)
@@ -90,7 +118,6 @@ dependencies {
 //    implementation "org.readium.kotlin-toolkit:readium-streamer:$readium_version"
 //    implementation "org.readium.kotlin-toolkit:readium-navigator:$readium_version"
 //    implementation "org.readium.kotlin-toolkit:readium-opds:$readium_version"
-//    implementation "org.readium.kotlin-toolkit:readium-lcp:$readium_version"
 
 //    implementation(project(":readium:readium-shared"))
     implementation("org.readium.kotlin-toolkit:readium-shared:3.0.3")
@@ -101,13 +128,13 @@ dependencies {
     // Only required if you want to support audiobooks using ExoPlayer.
     implementation("org.readium.kotlin-toolkit:readium-adapter-exoplayer:3.0.3")
     implementation("org.readium.kotlin-toolkit:readium-opds:3.0.3")
-    implementation("org.readium.kotlin-toolkit:readium-lcp:3.0.3")
-    // Only required if you want to support PDF files using PDFium.
-    implementation("org.readium.kotlin-toolkit:readium-adapter-pdfium:3.0.3")
 
-    // Main TensorFlow Lite library
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // LiteRT is TensorFlow Lite under its new name, with the same org.tensorflow.lite API.
+    // Unlike TensorFlow Lite 2.14, its native library supports 16 KB memory pages.
+    implementation("com.google.ai.edge.litert:litert:1.4.2")
+    implementation("com.google.ai.edge.litert:litert-support:1.4.2")
+    // Pulled in by Compose; this version's native library supports 16 KB memory pages
+    implementation("androidx.graphics:graphics-path:1.1.0")
 
 
     implementation("info.debatty:java-string-similarity:2.0.0")
@@ -156,6 +183,7 @@ dependencies {
     implementation(libs.joda.time)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.jsoup)
+    implementation("com.google.android.gms:play-services-oss-licenses:17.1.0")
 
 
     implementation(libs.bundles.media3)

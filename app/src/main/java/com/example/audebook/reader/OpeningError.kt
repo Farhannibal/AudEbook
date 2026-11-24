@@ -6,7 +6,6 @@
 
 package com.example.audebook.reader
 
-import org.readium.r2.lcp.LcpError
 import org.readium.r2.shared.util.Error
 import com.example.audebook.R
 import com.example.audebook.domain.toUserError
@@ -41,8 +40,7 @@ sealed class OpeningError(
             is PublicationError ->
                 cause.toUserError()
             is RestrictedPublication ->
-                (cause as? LcpError)?.toUserError()
-                    ?: UserError(R.string.publication_error_restricted, cause = this)
+                UserError(R.string.publication_error_restricted, cause = this)
             is CannotRender ->
                 UserError(R.string.opening_publication_cannot_render, cause = this)
         }

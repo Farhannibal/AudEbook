@@ -22,8 +22,6 @@ import org.readium.r2.shared.util.toUri
 import com.example.audebook.Application
 import com.example.audebook.R
 import com.example.audebook.databinding.ActivityReaderBinding
-import com.example.audebook.drm.DrmManagementContract
-import com.example.audebook.drm.DrmManagementFragment
 import com.example.audebook.outline.OutlineContract
 import com.example.audebook.outline.OutlineFragment
 import com.example.audebook.utils.launchWebBrowser
@@ -78,16 +76,6 @@ open class ReaderActivity : AppCompatActivity() {
             }
         )
 
-        supportFragmentManager.setFragmentResultListener(
-            DrmManagementContract.REQUEST_KEY,
-            this,
-            FragmentResultListener { _, result ->
-                if (DrmManagementContract.parseResult(result).hasReturned) {
-                    finish()
-                }
-            }
-        )
-
         supportFragmentManager.addOnBackStackChangedListener {
             reconfigureActionBar()
         }
@@ -103,7 +91,6 @@ open class ReaderActivity : AppCompatActivity() {
             is EpubReaderInitData -> EpubReaderFragment::class.java
             is ImageReaderInitData -> ImageReaderFragment::class.java
             is MediaReaderInitData -> AudioReaderFragment::class.java
-            is PdfReaderInitData -> PdfReaderFragment::class.java
             is DummyReaderInitData -> null
         }
 
@@ -126,13 +113,12 @@ open class ReaderActivity : AppCompatActivity() {
 
         title = when (currentFragment) {
             is OutlineFragment -> model.publication.metadata.title
-            is DrmManagementFragment -> getString(R.string.title_fragment_drm_management)
             else -> null
         }
 
         supportActionBar!!.setDisplayHomeAsUpEnabled(
             when (currentFragment) {
-                is OutlineFragment, is DrmManagementFragment -> true
+                is OutlineFragment -> true
                 else -> false
             }
         )
@@ -142,8 +128,6 @@ open class ReaderActivity : AppCompatActivity() {
         when (command) {
             is ReaderViewModel.ActivityCommand.OpenOutlineRequested ->
                 showOutlineFragment()
-            is ReaderViewModel.ActivityCommand.OpenDrmManagementRequested ->
-                showDrmManagementFragment()
             is ReaderViewModel.ActivityCommand.OpenExternalLink ->
                 launchWebBrowser(this, command.url.toUri())
             is ReaderViewModel.ActivityCommand.ToastError ->
@@ -169,19 +153,6 @@ open class ReaderActivity : AppCompatActivity() {
         supportFragmentManager.popBackStack()
     }
 
-    private fun showDrmManagementFragment() {
-        supportFragmentManager.commit {
-            add(
-                R.id.activity_container,
-                DrmManagementFragment::class.java,
-                Bundle(),
-                DRM_FRAGMENT_TAG
-            )
-            hide(readerFragment)
-            addToBackStack(null)
-        }
-    }
-
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             android.R.id.home -> {
@@ -195,6 +166,5 @@ open class ReaderActivity : AppCompatActivity() {
     companion object {
         const val READER_FRAGMENT_TAG = "reader"
         const val OUTLINE_FRAGMENT_TAG = "outline"
-        const val DRM_FRAGMENT_TAG = "drm"
     }
 }

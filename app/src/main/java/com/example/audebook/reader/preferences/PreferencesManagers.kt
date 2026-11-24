@@ -21,10 +21,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferences
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferencesSerializer
-import org.readium.adapter.pdfium.navigator.PdfiumPreferences
-import org.readium.adapter.pdfium.navigator.PdfiumPreferencesSerializer
-import org.readium.adapter.pdfium.navigator.PdfiumPublicationPreferencesFilter
-import org.readium.adapter.pdfium.navigator.PdfiumSharedPreferencesFilter
 import org.readium.navigator.media.tts.android.AndroidTtsPreferences
 import org.readium.navigator.media.tts.android.AndroidTtsPreferencesSerializer
 import org.readium.navigator.media.tts.android.AndroidTtsPublicationPreferencesFilter
@@ -36,6 +32,7 @@ import org.readium.r2.navigator.epub.EpubSharedPreferencesFilter
 import org.readium.r2.navigator.preferences.Configurable
 import org.readium.r2.navigator.preferences.PreferencesFilter
 import org.readium.r2.navigator.preferences.PreferencesSerializer
+import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.ExperimentalReadiumApi
 import com.example.audebook.utils.extensions.stateInFirst
 import com.example.audebook.utils.tryOrNull
@@ -58,7 +55,9 @@ sealed class PreferencesManagerFactory<P : Configurable.Preferences<P>>(
     private val sharedPreferencesFilter: PreferencesFilter<P>,
     private val publicationPreferencesFilter: PreferencesFilter<P>,
     private val preferencesSerializer: PreferencesSerializer<P>,
-    private val emptyPreferences: P
+    private val emptyPreferences: P,
+    // Settings used until the user changes any of them
+    private val defaultPreferences: P = emptyPreferences
 ) {
     suspend fun createPreferenceManager(bookId: Long): PreferencesManager<P> {
         val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -91,7 +90,7 @@ sealed class PreferencesManagerFactory<P : Configurable.Preferences<P>>(
             .map { json ->
                 tryOrNull {
                     json?.let { preferencesSerializer.deserialize(it) }
-                } ?: emptyPreferences
+                } ?: defaultPreferences
             }
 
         val pubPrefs = dataStore.data
@@ -123,18 +122,9 @@ class EpubPreferencesManagerFactory(
     sharedPreferencesFilter = EpubSharedPreferencesFilter,
     publicationPreferencesFilter = EpubPublicationPreferencesFilter,
     preferencesSerializer = EpubPreferencesSerializer(),
-    emptyPreferences = EpubPreferences()
-)
-
-class PdfiumPreferencesManagerFactory(
-    dataStore: DataStore<Preferences>
-) : PreferencesManagerFactory<PdfiumPreferences>(
-    dataStore = dataStore,
-    klass = PdfiumPreferences::class,
-    sharedPreferencesFilter = PdfiumSharedPreferencesFilter,
-    publicationPreferencesFilter = PdfiumPublicationPreferencesFilter,
-    preferencesSerializer = PdfiumPreferencesSerializer(),
-    emptyPreferences = PdfiumPreferences()
+    emptyPreferences = EpubPreferences(),
+    // Dark, and scrolling rather than paginated, which suits following the highlight
+    defaultPreferences = EpubPreferences(theme = Theme.DARK, scroll = true)
 )
 
 class ExoPlayerPreferencesManagerFactory(

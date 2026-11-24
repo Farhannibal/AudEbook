@@ -16,7 +16,6 @@ import org.tensorflow.lite.Tensor;
 //import org.tensorflow.lite.gpu.CompatibilityList;
 //import org.tensorflow.lite.gpu.GpuDelegate;
 //import org.tensorflow.lite.nnapi.NnApiDelegate;
-import org.tensorflow.lite.nnapi.NnApiDelegate;
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
 import java.io.ByteArrayOutputStream;

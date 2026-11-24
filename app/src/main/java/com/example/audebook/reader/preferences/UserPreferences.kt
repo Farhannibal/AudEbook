@@ -20,7 +20,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.audebook.Application
 import org.readium.adapter.exoplayer.audio.ExoPlayerPreferencesEditor
-import org.readium.adapter.pdfium.navigator.PdfiumPreferencesEditor
 import org.readium.navigator.media.tts.android.AndroidTtsEngine
 import org.readium.r2.navigator.epub.EpubPreferencesEditor
 import org.readium.r2.navigator.preferences.*
@@ -80,7 +79,15 @@ private fun <P : Configurable.Preferences<P>, E : PreferencesEditor<P>> UserPref
             PresetsMenuButton(presets = editor.presets, commit = commit, clear = editor::clear)
 
             Button(
-                onClick = { editor.clear(); commit() }
+                onClick = {
+                    editor.clear()
+                    // Back to the app's defaults (see EpubPreferencesManagerFactory), not Readium's
+                    if (editor is EpubPreferencesEditor) {
+                        editor.theme.set(Theme.DARK)
+                        editor.scroll.set(true)
+                    }
+                    commit()
+                }
             ) {
                 Text("Reset")
             }
@@ -89,15 +96,6 @@ private fun <P : Configurable.Preferences<P>, E : PreferencesEditor<P>> UserPref
         Divider()
 
         when (editor) {
-            is PdfiumPreferencesEditor ->
-                FixedLayoutUserPreferences(
-                    commit = commit,
-                    readingProgression = editor.readingProgression,
-                    scrollAxis = editor.scrollAxis,
-                    fit = editor.fit,
-                    pageSpacing = editor.pageSpacing
-                )
-
             is EpubPreferencesEditor ->
                 when (editor.layout) {
                     EpubLayout.REFLOWABLE ->

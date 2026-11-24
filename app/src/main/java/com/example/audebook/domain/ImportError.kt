@@ -6,7 +6,6 @@
 
 package com.example.audebook.domain
 
-import org.readium.r2.lcp.LcpError
 import org.readium.r2.shared.util.DebugError
 import org.readium.r2.shared.util.Error
 import org.readium.r2.shared.util.content.ContentResolverError
@@ -21,13 +20,6 @@ sealed class ImportError(
 
     override val message: String =
         "Import failed"
-
-    object MissingLcpSupport :
-        ImportError(DebugError("Lcp support is missing."))
-
-    class LcpAcquisitionFailed(
-        override val cause: LcpError
-    ) : ImportError(cause)
 
     class Publication(
         override val cause: PublicationError
@@ -55,10 +47,8 @@ sealed class ImportError(
         ImportError(cause)
 
     fun toUserError(): UserError = when (this) {
-        is MissingLcpSupport -> UserError(R.string.missing_lcp_support, cause = this)
         is Database -> UserError(R.string.import_publication_unable_add_pub_database, cause = this)
         is Download -> UserError(R.string.import_publication_download_failed, cause = this)
-        is LcpAcquisitionFailed -> cause.toUserError()
         is Opds -> UserError(R.string.import_publication_no_acquisition, cause = this)
         is Publication -> cause.toUserError()
         is FileSystem -> cause.toUserError()
