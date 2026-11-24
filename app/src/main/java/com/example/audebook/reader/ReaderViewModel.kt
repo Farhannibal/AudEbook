@@ -322,7 +322,6 @@ class ReaderViewModel(
 
     sealed class ActivityCommand {
         object OpenOutlineRequested : ActivityCommand()
-        object OpenDrmManagementRequested : ActivityCommand()
         class OpenExternalLink(val url: AbsoluteUrl) : ActivityCommand()
         class ToastError(val error: UserError) : ActivityCommand()
     }

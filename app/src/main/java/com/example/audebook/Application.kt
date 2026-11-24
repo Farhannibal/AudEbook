@@ -84,8 +84,7 @@ class Application : android.app.Application() {
                 assetRetriever = readium.assetRetriever,
                 bookshelfDir = storageDir,
                 tempDir = downloadsDir,
-                httpClient = readium.httpClient,
-                lcpService = readium.lcpService.getOrNull()
+                httpClient = readium.httpClient
             )
 
         bookshelf =

@@ -55,8 +55,8 @@ private fun Uri.extension(context: Context): String? {
 
 /**
  * Keeps access to a document picked with OpenDocument across restarts. Read access is what
- * opening and transcribing need; write is kept as well when the provider granted it (Readium
- * can write an LCP license into a publication), otherwise read only.
+ * opening and transcribing need; write is kept as well when the provider granted it,
+ * otherwise read only.
  */
 fun ContentResolver.persistDocumentAccess(uri: Uri) {
     val read = Intent.FLAG_GRANT_READ_URI_PERMISSION

@@ -16,7 +16,6 @@ import androidx.core.view.MenuHost
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import org.readium.r2.lcp.lcpLicense
 import org.readium.r2.navigator.Navigator
 import org.readium.r2.navigator.preferences.Configurable
 import org.readium.r2.shared.ExperimentalReadiumApi
@@ -70,9 +69,6 @@ abstract class BaseReaderFragment : Fragment() {
 
                     menu.findItem(R.id.settings).isVisible =
                         navigator is Configurable<*, *>
-
-                    menu.findItem(R.id.drm).isVisible =
-                        model.publication.lcpLicense != null
                 }
 
                 override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
@@ -90,12 +86,6 @@ abstract class BaseReaderFragment : Fragment() {
                         R.id.settings -> {
                             MainPreferencesBottomSheetDialogFragment()
                                 .show(childFragmentManager, "Settings")
-                            return true
-                        }
-                        R.id.drm -> {
-                            model.activityChannel.send(
-                                ReaderViewModel.ActivityCommand.OpenDrmManagementRequested
-                            )
                             return true
                         }
                     }

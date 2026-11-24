@@ -189,33 +189,11 @@
                         android:textSize="18sp" />
 
                     <TextView
+                        android:id="@+id/app_version"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:padding="10dp"
-                        android:text="@string/app_version"
-                        android:textSize="18sp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:padding="10dp"
-                        android:text="@string/github_tab_label"
-                        android:textSize="18sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:padding="10dp"
-                        android:text="@string/github_tag"
                         android:textSize="18sp" />
                 </LinearLayout>
 
@@ -311,7 +289,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:padding="10dp"
-                        android:text="@string/acknowledgements_ffmpeg"
+                        android:text="@string/acknowledgements_whisper"
                         android:textSize="16sp" />
 
                     <TextView
@@ -457,6 +435,14 @@
                         android:padding="10dp"
                         android:text="@string/acknowledgements_thanks"
                         android:textSize="16sp" />
+
+                    <Button
+                        android:id="@+id/open_source_licenses"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_margin="10dp"
+                        android:text="@string/open_source_licenses" />
 
                     
 

@@ -7,15 +7,9 @@
 package com.example.audebook
 
 import android.content.Context
-import android.view.View
 import org.readium.adapter.pdfium.document.PdfiumDocumentFactory
-import org.readium.r2.lcp.LcpError
-import org.readium.r2.lcp.LcpService
-import org.readium.r2.lcp.auth.LcpDialogAuthentication
 import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.shared.ExperimentalReadiumApi
-import org.readium.r2.shared.util.DebugError
-import org.readium.r2.shared.util.Try
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.http.DefaultHttpClient
 import org.readium.r2.streamer.PublicationOpener
@@ -33,22 +27,6 @@ class Readium(context: Context) {
         AssetRetriever(context.contentResolver, httpClient)
 
     /**
-     * The LCP service decrypts LCP-protected publication and acquire publications from a
-     * license file.
-     */
-    val lcpService = LcpService(
-        context,
-        assetRetriever
-    )?.let { Try.success(it) }
-        ?: Try.failure(LcpError.Unknown(DebugError("liblcp is missing on the classpath")))
-
-    private val lcpDialogAuthentication = LcpDialogAuthentication()
-
-    private val contentProtections = listOfNotNull(
-        lcpService.getOrNull()?.contentProtection(lcpDialogAuthentication)
-    )
-
-    /**
      * The PublicationFactory is used to open publications.
      */
     val publicationOpener = PublicationOpener(
@@ -59,16 +37,8 @@ class Readium(context: Context) {
             // Only required if you want to support PDF files using the PDFium adapter.
             pdfFactory = PdfiumDocumentFactory(context)
         ),
-        contentProtections = contentProtections
+        contentProtections = emptyList()
     )
-
-    fun onLcpDialogAuthenticationParentAttached(view: View) {
-        lcpDialogAuthentication.onParentViewAttachedToWindow(view)
-    }
-
-    fun onLcpDialogAuthenticationParentDetached() {
-        lcpDialogAuthentication.onParentViewDetachedFromWindow()
-    }
 }
 
 @OptIn(ExperimentalReadiumApi::class)

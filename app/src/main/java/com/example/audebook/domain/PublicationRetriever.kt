@@ -10,7 +10,6 @@ import android.content.Context
 import android.net.Uri
 import java.io.File
 import java.util.UUID
-import org.readium.r2.lcp.LcpService
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.opds.images
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -35,14 +34,11 @@ import timber.log.Timber
 
 /**
  * Retrieves a publication from a remote or local source and import it into the bookshelf storage.
- *
- * If the source file is a LCP license document, the protected publication will be downloaded.
  */
 class PublicationRetriever(
     context: Context,
     private val assetRetriever: AssetRetriever,
     private val httpClient: HttpClient,
-    lcpService: LcpService?,
     private val bookshelfDir: File,
     private val tempDir: File
 ) {
@@ -53,7 +49,7 @@ class PublicationRetriever(
     )
 
     private val localPublicationRetriever: LocalPublicationRetriever =
-        LocalPublicationRetriever(context, tempDir, assetRetriever, lcpService)
+        LocalPublicationRetriever(context, tempDir, assetRetriever)
 
     private val opdsPublicationRetriever: OpdsPublicationRetriever =
         OpdsPublicationRetriever(httpClient, tempDir)
@@ -190,13 +186,12 @@ class PublicationRetriever(
 }
 
 /**
- * Retrieves a publication from a file (publication or LCP license document) stored on the device.
+ * Retrieves a publication from a file stored on the device.
  */
 private class LocalPublicationRetriever(
     private val context: Context,
     private val tempDir: File,
-    private val assetRetriever: AssetRetriever,
-    private val lcpService: LcpService?
+    private val assetRetriever: AssetRetriever
 ) {
 
     data class Result(
@@ -243,27 +238,6 @@ private class LocalPublicationRetriever(
                 return Try.failure(ImportError.Publication(PublicationError(it)))
             }
 
-        if (
-            sourceAsset is ResourceAsset &&
-            sourceAsset.format.conformsTo(Specification.LcpLicense)
-        ) {
-            return if (lcpService == null) {
-                sourceAsset.close()
-                Try.failure(ImportError.MissingLcpSupport)
-            } else {
-                val license = sourceAsset.resource.read()
-                    .getOrElse {
-                        sourceAsset.close()
-                        return Try.failure(ImportError.Publication(PublicationError.Reading(it)))
-                    }
-                sourceAsset.close()
-                val acquisition = lcpService.acquirePublication(license)
-                    .getOrElse { return Try.failure(ImportError.LcpAcquisitionFailed(it)) }
-                tryOrLog { tempFile.delete() }
-                Try.success(Result(acquisition.localFile, acquisition.format, coverUrl))
-            }
-        }
-
         Timber.d("FileTest "+ tempFile.absolutePath)
 
         sourceAsset.close()
@@ -292,7 +266,7 @@ private class OpdsPublicationRetriever(
      */
     suspend fun retrieve(publication: Publication): Try<Result, ImportError> {
         val acquisitionLink = publication.links
-            .firstOrNull { it.mediaType?.isPublication == true || it.mediaType == MediaType.LCP_LICENSE_DOCUMENT }
+            .firstOrNull { it.mediaType?.isPublication == true }
 
         val publicationUrl = (acquisitionLink?.url() as? AbsoluteUrl)
             ?: return Try.failure(
