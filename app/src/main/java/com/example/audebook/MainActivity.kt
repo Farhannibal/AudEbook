@@ -9,6 +9,8 @@ package com.example.audebook
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
@@ -28,6 +30,18 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Android 15+ draws apps behind the system bars and the camera cutout. The top bar and
+        // the bottom navigation keep clear of the top and bottom edges themselves, but nothing
+        // kept the screens clear of the sides, where the navigation buttons and the cutout are
+        // in landscape
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.container)) { view, insets ->
+            val sides = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.setPadding(sides.left, view.paddingTop, sides.right, view.paddingBottom)
+            insets
+        }
 
         val navView: BottomNavigationView = findViewById(R.id.nav_view)
         val navHostFragment =
