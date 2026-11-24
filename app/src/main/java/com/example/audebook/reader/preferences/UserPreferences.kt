@@ -349,6 +349,57 @@ private fun ReflowableUserPreferences(
     verticalText: Preference<Boolean>? = null,
     wordSpacing: RangePreference<Double>? = null
 ) {
+    // Text size first: it's what readers change most
+    if (fontFamily != null || fontSize != null || textNormalization != null) {
+        if (fontFamily != null) {
+            MenuItem(
+                title = "Typeface",
+                preference = fontFamily
+                    .withSupportedValues(
+                        null,
+                        FontFamily.LITERATA,
+                        FontFamily.SANS_SERIF,
+                        FontFamily.IA_WRITER_DUOSPACE,
+                        FontFamily.ACCESSIBLE_DFA,
+                        FontFamily.OPEN_DYSLEXIC
+                    ),
+                commit = commit
+            ) { value ->
+                when (value) {
+                    null -> "Original"
+                    FontFamily.SANS_SERIF -> "Sans Serif"
+                    else -> value.name
+                }
+            }
+        }
+
+        if (fontSize != null) {
+            StepperItem(
+                title = "Font size",
+                preference = fontSize,
+                commit = commit
+            )
+        }
+
+        if (fontWeight != null) {
+            StepperItem(
+                title = "Font weight",
+                preference = fontWeight,
+                commit = commit
+            )
+        }
+
+        if (textNormalization != null) {
+            SwitchItem(
+                title = "Text normalization",
+                preference = textNormalization,
+                commit = commit
+            )
+        }
+
+        Divider()
+    }
+
     if (language != null || readingProgression != null || verticalText != null) {
         if (language != null) {
             LanguageItem(
@@ -452,56 +503,6 @@ private fun ReflowableUserPreferences(
             ColorItem(
                 title = "Background color",
                 preference = backgroundColor,
-                commit = commit
-            )
-        }
-
-        Divider()
-    }
-
-    if (fontFamily != null || fontSize != null || textNormalization != null) {
-        if (fontFamily != null) {
-            MenuItem(
-                title = "Typeface",
-                preference = fontFamily
-                    .withSupportedValues(
-                        null,
-                        FontFamily.LITERATA,
-                        FontFamily.SANS_SERIF,
-                        FontFamily.IA_WRITER_DUOSPACE,
-                        FontFamily.ACCESSIBLE_DFA,
-                        FontFamily.OPEN_DYSLEXIC
-                    ),
-                commit = commit
-            ) { value ->
-                when (value) {
-                    null -> "Original"
-                    FontFamily.SANS_SERIF -> "Sans Serif"
-                    else -> value.name
-                }
-            }
-        }
-
-        if (fontSize != null) {
-            StepperItem(
-                title = "Font size",
-                preference = fontSize,
-                commit = commit
-            )
-        }
-
-        if (fontWeight != null) {
-            StepperItem(
-                title = "Font weight",
-                preference = fontWeight,
-                commit = commit
-            )
-        }
-
-        if (textNormalization != null) {
-            SwitchItem(
-                title = "Text normalization",
-                preference = textNormalization,
                 commit = commit
             )
         }
