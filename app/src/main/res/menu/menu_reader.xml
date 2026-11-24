@@ -14,14 +14,6 @@
         app:iconifiedByDefault="false"
         app:showAsAction="collapseActionView|always" />
 
-    <item
-        android:id="@+id/tts"
-        android:icon="@drawable/ic_baseline_headphones_24"
-        android:title="@string/epubactivity_read_aloud_start"
-        android:visible="false"
-        app:showAsAction="always"
-        tools:ignore="AlwaysShowAction"/>
-
 
     <item
         android:id="@+id/bookmark"

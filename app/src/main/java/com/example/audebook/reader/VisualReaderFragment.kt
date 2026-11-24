@@ -16,7 +16,6 @@ import android.view.ActionMode
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.Menu
-import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -44,8 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.core.view.MenuHost
-import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -70,7 +67,6 @@ import org.readium.r2.navigator.util.DirectionalNavigationAdapter
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.util.Language
-import com.example.audebook.BuildConfig
 import com.example.audebook.R
 import com.example.audebook.data.model.Highlight
 import com.example.audebook.databinding.FragmentReaderBinding
@@ -166,28 +162,6 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                 content = { Overlay() }
             )
         }
-
-        val menuHost: MenuHost = requireActivity()
-
-        menuHost.addMenuProvider(
-            object : MenuProvider {
-                override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-                    // Read-aloud fights with the audiobook sync, so it's only offered in debug builds
-                    menu.findItem(R.id.tts).isVisible = BuildConfig.DEBUG && model.tts != null
-                }
-
-                override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
-                    when (menuItem.itemId) {
-                        R.id.tts -> {
-                            checkNotNull(model.tts).start(navigator)
-                            return true
-                        }
-                    }
-                    return false
-                }
-            },
-            viewLifecycleOwner
-        )
 
         model.visualFragmentChannel.receive(viewLifecycleOwner) { event ->
             when (event) {

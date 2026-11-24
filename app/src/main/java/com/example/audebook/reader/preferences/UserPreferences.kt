@@ -80,7 +80,15 @@ private fun <P : Configurable.Preferences<P>, E : PreferencesEditor<P>> UserPref
             PresetsMenuButton(presets = editor.presets, commit = commit, clear = editor::clear)
 
             Button(
-                onClick = { editor.clear(); commit() }
+                onClick = {
+                    editor.clear()
+                    // Back to the app's defaults (see EpubPreferencesManagerFactory), not Readium's
+                    if (editor is EpubPreferencesEditor) {
+                        editor.theme.set(Theme.DARK)
+                        editor.scroll.set(true)
+                    }
+                    commit()
+                }
             ) {
                 Text("Reset")
             }
