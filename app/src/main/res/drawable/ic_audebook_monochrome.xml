@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One-colour version of the foreground for themed icons (Android 13+), which tint it to match
+  the wallpaper. The text and sound wave are cut out of the pages instead of drawn on top.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Raised slightly so the artwork looks centred -->
+    <group android:translateY="-2">
+
+        <path
+            android:pathData="M32,60 A22,22 0 0,1 76,60"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="4"
+            android:strokeLineCap="round" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M31,56h3a4,4 0,0 1,4 4v8a4,4 0,0 1,-4 4h-3a4,4 0,0 1,-4 -4v-8a4,4 0,0 1,4 -4z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M74,56h3a4,4 0,0 1,4 4v8a4,4 0,0 1,-4 4h-3a4,4 0,0 1,-4 -4v-8a4,4 0,0 1,4 -4z" />
+
+        <!-- Pages with the lines and wave as holes (even-odd fill) -->
+        <path
+            android:fillColor="#FF000000"
+            android:fillType="evenOdd"
+            android:pathData="M41,53 Q47,50 53,53 L53,74 Q47,71 41,74 Z
+                M44,57.6h6v1.8h-6z M44,61.6h6v1.8h-6z M44,65.6h4v1.8h-4z" />
+        <path
+            android:fillColor="#FF000000"
+            android:fillType="evenOdd"
+            android:pathData="M55,53 Q61,50 67,53 L67,74 Q61,71 55,74 Z
+                M57.1,61h1.8v4h-1.8z M59.6,58.5h1.8v9h-1.8z M62.1,60h1.8v6h-1.8z M64.6,62h1.8v2h-1.8z" />
+    </group>
+</vector>

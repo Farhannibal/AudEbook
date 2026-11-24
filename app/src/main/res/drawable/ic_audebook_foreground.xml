@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher icon foreground: an open book wearing headphones, with lines of text on the left page
+  and a sound wave on the right. Everything stays inside the 66dp circle in the middle of the
+  108dp canvas, which every launcher mask keeps.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Raised slightly so the artwork looks centred -->
+    <group android:translateY="-2">
+
+        <!-- Headband -->
+        <path
+            android:pathData="M32,60 A22,22 0 0,1 76,60"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="4"
+            android:strokeLineCap="round" />
+
+        <!-- Ear cups -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M31,56h3a4,4 0,0 1,4 4v8a4,4 0,0 1,-4 4h-3a4,4 0,0 1,-4 -4v-8a4,4 0,0 1,4 -4z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M74,56h3a4,4 0,0 1,4 4v8a4,4 0,0 1,-4 4h-3a4,4 0,0 1,-4 -4v-8a4,4 0,0 1,4 -4z" />
+
+        <!-- Book pages -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M41,53 Q47,50 53,53 L53,74 Q47,71 41,74 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M55,53 Q61,50 67,53 L67,74 Q61,71 55,74 Z" />
+
+        <!-- Text on the left page -->
+        <path
+            android:pathData="M44,58.5h6 M44,62.5h6 M44,66.5h4"
+            android:strokeColor="#FFEB6A2A"
+            android:strokeWidth="1.8"
+            android:strokeLineCap="round" />
+
+        <!-- Sound wave on the right page -->
+        <path
+            android:pathData="M58,61v4 M60.5,58.5v9 M63,60v6 M65.5,62v2"
+            android:strokeColor="#FFEB6A2A"
+            android:strokeWidth="1.8"
+            android:strokeLineCap="round" />
+    </group>
+</vector>
