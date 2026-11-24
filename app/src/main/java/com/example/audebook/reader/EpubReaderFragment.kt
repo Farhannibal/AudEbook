@@ -16,6 +16,8 @@ import android.graphics.drawable.AnimatedVectorDrawable
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.content.res.Configuration
+import android.graphics.Rect
 import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.text.format.DateUtils
@@ -23,6 +25,7 @@ import android.view.*
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
+import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.SeekBar
 import androidx.activity.result.ActivityResultLauncher
@@ -96,6 +99,7 @@ import kotlin.time.Duration
 import kotlin.time.DurationUnit
 
 import com.example.audebook.utils.AudioSegmentExtractor
+import com.example.audebook.utils.ScrollFollower
 import com.example.audebook.utils.SpeedRamp
 import com.example.audebook.utils.sync.BookPosition
 import com.example.audebook.utils.sync.SyncTracker
@@ -106,7 +110,6 @@ import com.example.audebook.domain.Bookshelf
 import com.example.audebook.domain.PublicationRetriever
 import com.example.audebook.reader.preferences.AudioPreferencesBottomSheetDialogFragment
 import com.example.audebook.reader.preferences.ExoPlayerPreferencesManagerFactory
-import com.example.audebook.reader.tts.TtsPreferencesBottomSheetDialogFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -124,6 +127,7 @@ import java.io.IOException
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import org.readium.r2.navigator.preferences.Configurable
@@ -237,7 +241,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     lateinit var audioDialog: AudioPreferencesBottomSheetDialogFragment
 
-    lateinit var scrollSpeedDialog: TtsPreferencesBottomSheetDialogFragment
 
     // Reads the audiobook in place; opened in loadAudiobookNavigator, closed in onDestroy
     private var audioSegmentExtractor: AudioSegmentExtractor? = null
@@ -513,8 +516,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         binding.transcribe.setOnClickListener(this::onReanchorTranscriptionLocator)
         binding.loadAudioBook.setOnClickListener(this::onLoadAudioBook)
         binding.setSpeed.setOnClickListener(this::onSetSpeed)
-        binding.setScrollSpeed.setOnClickListener(this::onSetScrollSpeed)
-        binding.overlay.setOnTouchListener(this::onReaderTouched)
+        // Every touch, including those the book's WebViews take, so scrolling by hand is noticed
+        (activity as? ReaderActivity)?.onAnyTouch = this::onReaderTouched
         updateControlsLayoutBackground(false)
 
         CachedWebView = findAllWebViews(requireView())
@@ -522,6 +525,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        applyControlsLayout(resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
+        // A new font size, spacing etc. lays the page out again: bring the spoken word back
+        viewLifecycleOwner.lifecycleScope.launch {
+            navigator.settings.drop(1).collect { recenterSoon() }
+        }
 
         @Suppress("Unchecked_cast")
         (model.settings as UserPreferencesViewModel<EpubSettings, EpubPreferences>)
@@ -718,28 +727,35 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         // Recent Whisper times averaged when choosing a thread count (see TranscriptionPacing)
         private const val SLOT_TIME_WINDOW = 3
 
-        // Auto-scroll catch-up. Positions are where the current highlight ends, as a fraction of
-        // the readable area (1.0 = top of the audio controls).
         private const val CURRENT_HIGHLIGHT_ID_PREFIX = "tts-now-"
-        private const val HIGHLIGHT_CHECK_INTERVAL_MS = 300L
-        private const val HIGHLIGHT_NEAR_BOTTOM_POSITION = 0.8
-        private const val HIGHLIGHT_OFFSCREEN_POSITION = 1.0
-        private const val HIGHLIGHT_CAUGHT_UP_POSITION = 0.55
-        private const val SCROLL_BOOST_NEAR_BOTTOM = 3.0
-        private const val SCROLL_BOOST_OFFSCREEN = 6.0
 
-        // Bottom of the current slot's highlight as a fraction of the page height, from the
-        // text ranges Readium keeps for the "tts" decoration group in each chapter's WebView
-        private const val CURRENT_HIGHLIGHT_BOTTOM_JS = """
+        // Following the spoken word in scroll mode (see ScrollFollower)
+        private const val FOLLOW_CHECK_INTERVAL_MS = 150L
+        private const val FOLLOW_FRAME_MS = 16L
+        private const val USER_SCROLL_PAUSE_MS = 3000L
+        // Time for the page to lay itself out again after a rotation or font change
+        private const val RECENTER_DELAY_MS = 800L
+
+        // Middle of the word cursor (or, before it appears, the top of the current slot's
+        // highlight) as a fraction of the WebView's height. Off-page positions are below 0 or
+        // above 1, which is how a rotation or font change that moved the text is noticed.
+        private const val SPOKEN_WORD_POSITION_JS = """
             (function() {
                 if (!window.readium || !readium.getDecorations) return null;
-                var bottom = null;
-                readium.getDecorations('tts').items.forEach(function(item) {
-                    if (String(item.decoration.id).indexOf('$CURRENT_HIGHLIGHT_ID_PREFIX') !== 0) return;
-                    var rect = item.range.getBoundingClientRect();
-                    if (rect.height > 0 && (bottom === null || rect.bottom > bottom)) bottom = rect.bottom;
-                });
-                return bottom === null ? null : bottom / window.innerHeight;
+                var rect = null;
+                var words = readium.getDecorations('$WORD_CURSOR_GROUP').items;
+                if (words.length > 0) {
+                    var r = words[0].range.getBoundingClientRect();
+                    if (r.height > 0) rect = r;
+                }
+                if (rect === null) {
+                    readium.getDecorations('tts').items.forEach(function(item) {
+                        if (String(item.decoration.id).indexOf('$CURRENT_HIGHLIGHT_ID_PREFIX') !== 0) return;
+                        var r = item.range.getBoundingClientRect();
+                        if (r.height > 0 && (rect === null || r.top < rect.top)) rect = r;
+                    });
+                }
+                return rect === null ? null : (rect.top + rect.bottom) / 2 / window.innerHeight;
             })()
         """
     }
@@ -804,7 +820,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         audioDialog = AudioPreferencesBottomSheetDialogFragment()
         audioDialog.setAudioPreferencesModelFunc(preferencesModel!!)
 
-        scrollSpeedDialog = TtsPreferencesBottomSheetDialogFragment()
 
         return Try.success(navigator)
     }
@@ -979,80 +994,14 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 // Set the image of the setSpeed button
                 binding.setSpeed.setImageResource(speedDrawable)
 
-                var scrollspeed: Double? = null
-                try {
-                    scrollspeed =
-                        (scrollSpeedDialog.preferencesModel.editor.value.preferences as AndroidTtsPreferences).speed
-                } catch (e: Exception) {
-                    Timber.d("Transcription for scrollSpeedDialog: $e")
-                }
-
-                val roundedScrollSpeed = if (scrollspeed == null) {
-                    1.0
-                } else {
-                    when {
-                        scrollspeed <= 0.75 -> 0.5
-                        scrollspeed <= 0.95 -> 0.8
-                        scrollspeed <= 1.15 -> 1.0
-                        scrollspeed <= 1.45 -> 1.2
-                        scrollspeed <= 1.75 -> 1.5
-                        scrollspeed <= 1.95 -> 1.8
-                        scrollspeed <= 2.15 -> 2.0
-                        scrollspeed <= 2.45 -> 2.2
-                        scrollspeed <= 2.75 -> 2.5
-                        scrollspeed <= 2.95 -> 2.8
-                        scrollspeed <= 3.15 -> 3.0
-                        scrollspeed <= 3.45 -> 3.2
-                        scrollspeed <= 3.75 -> 3.5
-                        scrollspeed <= 3.95 -> 3.8
-                        scrollspeed <= 4.15 -> 4.0
-                        scrollspeed <= 4.45 -> 4.2
-                        scrollspeed <= 4.75 -> 4.5
-                        scrollspeed <= 4.95 -> 4.8
-                        else -> 5.0
-                    }
-                }
-
-                // Map the settingsSpeed to the corresponding drawable resource
-                val scrollSpeedDrawable = when (roundedScrollSpeed) {
-                    0.5 -> R.drawable.ic_icon_playback_speed_0_5
-                    0.8 -> R.drawable.ic_icon_playback_speed_0_8
-                    1.0 -> R.drawable.ic_icon_playback_speed_1_0
-                    1.2 -> R.drawable.ic_icon_playback_speed_1_2
-                    1.5 -> R.drawable.ic_icon_playback_speed_1_5
-                    1.8 -> R.drawable.ic_icon_playback_speed_1_8
-                    2.0 -> R.drawable.ic_icon_playback_speed_2_0
-                    2.2 -> R.drawable.ic_icon_playback_speed_2_2
-                    2.5 -> R.drawable.ic_icon_playback_speed_2_5
-                    2.8 -> R.drawable.ic_icon_playback_speed_2_8
-                    3.0 -> R.drawable.ic_icon_playback_speed_3_0
-                    3.2 -> R.drawable.ic_icon_playback_speed_3_2
-                    3.5 -> R.drawable.ic_icon_playback_speed_3_5
-                    3.8 -> R.drawable.ic_icon_playback_speed_3_8
-                    4.0 -> R.drawable.ic_icon_playback_speed_4_0
-                    4.2 -> R.drawable.ic_icon_playback_speed_4_2
-                    4.5 -> R.drawable.ic_icon_playback_speed_4_5
-                    4.8 -> R.drawable.ic_icon_playback_speed_4_8
-                    5.0 -> R.drawable.ic_icon_playback_speed_5_0
-                    else -> R.drawable.ic_icon_playback_speed_1_0 // Default to 1.0x if no match
-                }
-
-                // Set the image of the setSpeed button
-                binding.setScrollSpeed.setImageResource(scrollSpeedDrawable)
 
             }
         }
 
-        if (navigator.settings.value.scroll) {
-            if (autoScrollTempPauseFlag == false) {
-                if (latestPlaybackStatus.playWhenReady) {
-                    startAutoScrollWebViews()
-                } else {
-                    stopAutoScrollWebViews()
-                }
-            } else {
-                stopAutoScrollWebViews()
-            }
+        if (navigator.settings.value.scroll && latestPlaybackStatus.playWhenReady) {
+            startFollowing()
+        } else {
+            stopFollowing()
         }
 
     }
@@ -1342,16 +1291,19 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return audioNavigator.playback.value.state is MediaNavigator.State.Ended
     }
 
-    private fun onReaderTouched(view: View, event: MotionEvent): Boolean {
-        // Check if audioNavigator is initialized
-        if (autoScrollTempPauseFlag == false) {
-            viewLifecycleOwner.lifecycleScope.launch {
-                autoScrollTempPauseFlag = true
-                delay(1000)
-                autoScrollTempPauseFlag = false
-            }
-        }
-        return false
+    private fun onReaderTouched(event: MotionEvent) {
+        // Pressing the audio controls isn't scrolling
+        val controls = binding.audioOverlay
+        val controlsTop = IntArray(2).also { controls.getLocationOnScreen(it) }[1]
+        if (controls.isShown && event.rawY >= controlsTop) return
+        // The reader is scrolling or tapping the page: leave the scrolling to them for a moment
+        followPausedUntil = SystemClock.uptimeMillis() + USER_SCROLL_PAUSE_MS
+        scrollFollower.reset()
+    }
+
+    override fun onDestroyView() {
+        (activity as? ReaderActivity)?.onAnyTouch = null
+        super.onDestroyView()
     }
 
     private fun onLoadAudioBook(@Suppress("UNUSED_PARAMETER") view: View) {
@@ -1367,14 +1319,6 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         model.viewModelScope.launch {
 
             audioDialog.show(childFragmentManager, "Settings")
-        }
-    }
-
-    private fun onSetScrollSpeed(@Suppress("UNUSED_PARAMETER") view: View) {
-        model.viewModelScope.launch {
-            scrollSpeedDialog
-                .show(childFragmentManager, "TtsSettings")
-
         }
     }
 
@@ -1869,25 +1813,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                         if ((pageLocators[0].href == pageLocator.href))
                             pageLocator = pageLocators[0]
 
-                var locatorProg = pageLocator.locations.progression
-                var navigatorProg = navigator.currentLocator.value.locations.progression
-                if (locatorProg != null && navigatorProg != null) {
-                    Timber.d("Transcription for locatorProg < navigatorProg: $locatorProg < $navigatorProg")
-                    if (kotlin.math.abs(navigatorProg - locatorProg) > 0.15) {
-
-                        navigator.go(pageLocator, true)
-                        CachedWebView = findAllWebViews(requireView())
-                        // The jump put the highlight back on screen
-                        scrollBoost = 1.0
-
-                        if (autoScrollTempPauseFlag == false) {
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                autoScrollTempPauseFlag = true
-                                delay(1000)
-                                autoScrollTempPauseFlag = false
-                            }
-                        }
-                    }
+                // In scroll mode the follower keeps the spoken word on screen within a chapter,
+                // so the navigator only needs to open the chapter when the narrator moves on
+                if (settingsScroll && pageLocator.href != navigator.currentLocator.value.href) {
+                    Timber.d("Opening ${pageLocator.href} for the spoken text")
+                    navigator.go(pageLocator, true)
+                    CachedWebView = findAllWebViews(requireView())
+                    scrollFollower.reset()
                 }
 
                 if (!settingsScroll) {
@@ -1910,7 +1842,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                     )
 
                     // Unique ids, so Readium can tell the decorations apart and the auto-scroll
-                    // can find the current slot's highlight (see currentHighlightBottom)
+                    // can find the current slot's highlight (see SPOKEN_WORD_POSITION_JS)
                     val decorations: List<Decoration> = updatedMatchedLocators.mapIndexed { index, locator ->
                         Decoration(
                             id = "$CURRENT_HIGHLIGHT_ID_PREFIX$index",
@@ -1960,98 +1892,115 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return found
     }
 
-    // Add this property to your class to keep track of the scrolling job
-    private var webViewScrollJob: Job? = null
+    // Keeps the spoken word at a fixed height on the page while playing in scroll mode
+    private val scrollFollower = ScrollFollower()
+    private var followJob: Job? = null
+    private var followedWebView: WebView? = null
+    // Until then the reader is scrolling by hand, so the follower leaves the page alone
+    private var followPausedUntil = 0L
 
-    private var autoScrollTempPauseFlag = false
-
-    // Add this property to your class
-    private var autoScrollPauseJob: Job? = null
-
-    // Call this function to start auto-scrolling
-    private fun startAutoScrollWebViews() {
-        // Cancel any existing job
-        webViewScrollJob?.cancel()
-        webViewScrollJob = viewLifecycleOwner.lifecycleScope.launch {
-            while (latestPlaybackStatus.playWhenReady && isActive) {
-                var scrollspeed: Double? = null
-                try {
-                    scrollspeed =
-                        (scrollSpeedDialog.preferencesModel.editor.value.preferences as AndroidTtsPreferences).speed
-                } catch (e: Exception) {
-                    Timber.d("Transcription for scrollSpeedDialog: $e")
+    private fun startFollowing() {
+        if (followJob?.isActive == true) return
+        scrollFollower.reset()
+        followJob = viewLifecycleOwner.lifecycleScope.launch {
+            // Measure where the word is a few times a second...
+            launch {
+                while (isActive) {
+                    if (SystemClock.uptimeMillis() >= followPausedUntil) {
+                        val found = spokenWordPosition()
+                        followedWebView = found?.first
+                        val jump = scrollFollower.onPosition(found?.second, readableHeight())
+                        if (jump != 0 && found != null) {
+                            Timber.d("Follow: word at %.2f of the page, jumping %d px".format(found.second, jump))
+                            found.first.scrollBy(0, jump)
+                        }
+                    }
+                    delay(FOLLOW_CHECK_INTERVAL_MS)
                 }
-
-                if (scrollspeed == null)
-                    scrollspeed = 1.0
-
-                val now = System.currentTimeMillis()
-                if (now - lastHighlightCheckAt >= HIGHLIGHT_CHECK_INTERVAL_MS) {
-                    lastHighlightCheckAt = now
-                    updateScrollBoost()
-                }
-
-                CachedWebView.forEach {
-                    it.scrollBy(0, 4)
-                }
-                delay((100 / (scrollspeed * scrollBoost)).toLong()) // 0.1 seconds at 1x
+            }
+            // ...and scroll smoothly at the speed that keeps it at the target
+            var last = SystemClock.uptimeMillis()
+            while (isActive) {
+                delay(FOLLOW_FRAME_MS)
+                val now = SystemClock.uptimeMillis()
+                val pixels = scrollFollower.pixelsFor(now - last)
+                last = now
+                if (pixels != 0 && now >= followPausedUntil) followedWebView?.scrollBy(0, pixels)
             }
         }
     }
 
-    // Multiplies the auto-scroll speed while the spoken text is close to the controls, so the
-    // highlight doesn't run off the bottom of the page. Kept across restarts of the scroll job,
-    // which happen on every playback event.
-    private var scrollBoost = 1.0
-    private var lastHighlightCheckAt = 0L
-
-    private suspend fun updateScrollBoost() {
-        // Unknown (highlight in another chapter, or not drawn yet): keep the current speed
-        val position = currentHighlightBottom() ?: return
-        val boost = when {
-            position >= HIGHLIGHT_OFFSCREEN_POSITION -> SCROLL_BOOST_OFFSCREEN
-            position >= HIGHLIGHT_NEAR_BOTTOM_POSITION -> SCROLL_BOOST_NEAR_BOTTOM
-            position <= HIGHLIGHT_CAUGHT_UP_POSITION -> 1.0
-            // In between: keep going at the current speed until it has properly caught up,
-            // so it doesn't flip between speeds around the threshold
-            else -> scrollBoost
-        }
-        if (boost != scrollBoost) {
-            Timber.d("Auto-scroll boost $scrollBoost -> $boost (highlight at %.2f of the page)".format(position))
-            scrollBoost = boost
-        }
+    private fun stopFollowing() {
+        followJob?.cancel()
+        followJob = null
+        scrollFollower.reset()
     }
 
     /**
-     * Where the bottom of the current slot's highlight is, as a fraction of the readable area:
-     * 0 is the top of the page and 1 is the top edge of the audio controls. Null if no visible
-     * page has the highlight.
+     * Puts the spoken word back at the target height once the page has been laid out again after
+     * a rotation or a settings change, also while paused, since the reader didn't move the page.
      */
-    private suspend fun currentHighlightBottom(): Double? {
-        val root = view ?: return null
-        val controls = binding.audioOverlay
-        val readableFraction = if (controls.isShown && root.height > 0) {
-            controls.top.toDouble() / root.height
-        } else {
-            1.0
+    private fun recenterSoon() {
+        if (!navigator.settings.value.scroll) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            delay(RECENTER_DELAY_MS)
+            CachedWebView = findAllWebViews(requireView())
+            val (webView, position) = spokenWordPosition() ?: return@launch
+            Timber.d("Recentring: word at %.2f of the page".format(position))
+            webView.scrollBy(0, scrollFollower.recenter(position, readableHeight()))
         }
+    }
+
+    /** Height of the page above the audio controls, in pixels. */
+    private fun readableHeight(): Int {
+        val root = view ?: return 0
+        return if (binding.audioOverlay.isShown) binding.audioOverlay.top else root.height
+    }
+
+    /**
+     * The WebView showing the spoken word, and where the word is as a fraction of the readable
+     * area (0 is the top, 1 the top of the audio controls). Null if no visible page has it.
+     */
+    private suspend fun spokenWordPosition(): Pair<WebView, Double>? {
+        val readable = readableHeight()
+        if (readable <= 0) return null
+        val visible = Rect()
         for (webView in CachedWebView) {
-            if (!webView.isShown) continue
+            if (!webView.isShown || !webView.getGlobalVisibleRect(visible)) continue
             val result = withTimeoutOrNull(250) {
                 suspendCancellableCoroutine<String?> { continuation ->
-                    webView.evaluateJavascript(CURRENT_HIGHLIGHT_BOTTOM_JS) { continuation.resume(it) }
+                    webView.evaluateJavascript(SPOKEN_WORD_POSITION_JS) { continuation.resume(it) }
                 }
             }
-            val bottom = result?.toDoubleOrNull() ?: continue
-            return bottom / readableFraction
+            val fraction = result?.toDoubleOrNull() ?: continue
+            return webView to fraction * webView.height / readable
         }
+        // The pages may have been replaced (another chapter opened): look again next time
+        CachedWebView = findAllWebViews(view ?: return null)
         return null
     }
 
-    // Call this function to stop auto-scrolling
-    private fun stopAutoScrollWebViews() {
-        webViewScrollJob?.cancel()
-        webViewScrollJob = null
+    // In landscape the timeline and the buttons sit side by side, so the controls take one row
+    // instead of covering a third of the screen
+    private fun applyControlsLayout(landscape: Boolean) {
+        val controls = binding.controlsLayout
+        controls.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+        for (part in listOf(controls.getChildAt(0), binding.controls)) {
+            part.layoutParams = if (landscape) {
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+            } else {
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            }
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // The reader handles rotation itself (see the manifest), so playback and transcription
+        // carry on; only the layout changes
+        applyControlsLayout(newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE)
+        recenterSoon()
     }
 
 }

@@ -165,6 +165,7 @@
 
         <activity
             android:name=".reader.ReaderActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:label="Reader" />
 
         <service android:name=".reader.MediaService"
