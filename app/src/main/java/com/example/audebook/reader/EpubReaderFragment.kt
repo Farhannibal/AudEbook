@@ -884,7 +884,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         val playbackTranscribeSegment =
-            roundDownToSlot(binding.timelinePosition.text.toString())
+            roundDownToSlot(timelineAudioPosition.formatElapsedTime())
         val currentTime = System.currentTimeMillis()
 
         if (currentTime - lastHighlightUpdate >= 500) {
@@ -1190,17 +1190,30 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     }
 
     private fun getPlaybackTranscribeSegment(): String {
-        return roundDownToSlot(binding.timelinePosition.text.toString())
+        return roundDownToSlot(timelineAudioPosition.formatElapsedTime())
     }
+
+    // Where the timeline is in the audio itself (the dragged position while seeking). The labels
+    // show times at the chosen speed instead, so slots are worked out from this, not the label.
+    private var timelineAudioPosition: Duration = Duration.ZERO
+
+    /**
+     * The speed chosen in the audio settings, used for the times shown: a 12 hour book at 2x
+     * shows 6 hours. Not the speed of the start-up ramp, so the times don't change as it eases up.
+     */
+    private fun displaySpeed(): Double =
+        audioPreferences?.value?.speed?.takeIf { it > 0 } ?: 1.0
 
     private fun updateTimeline(
         playback: TimeBasedMediaNavigator.Playback
     ) {
         val currentItem = audioNavigator.readingOrder.items[playback.index]
         binding.timelineBar.max = currentItem.duration?.inWholeSeconds?.toInt() ?: 0
-        binding.timelineDuration.text = currentItem.duration?.formatElapsedTime()
+        val speed = displaySpeed()
+        binding.timelineDuration.text = currentItem.duration?.div(speed)?.formatElapsedTime()
         binding.timelineBar.progress = playback.offset.inWholeSeconds.toInt()
-        binding.timelinePosition.text = playback.offset.formatElapsedTime()
+        timelineAudioPosition = playback.offset
+        binding.timelinePosition.text = (playback.offset / speed).formatElapsedTime()
         binding.timelineBar.secondaryProgress = playback.buffered?.inWholeSeconds?.toInt() ?: 0
     }
 
@@ -1255,7 +1268,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
         if (fromUser) {
-            binding.timelinePosition.text = progress.seconds.formatElapsedTime()
+            timelineAudioPosition = progress.seconds
+            binding.timelinePosition.text = (progress.seconds / displaySpeed()).formatElapsedTime()
         }
     }
 
@@ -1341,7 +1355,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 if (sdcardDataFolder != null && !isExtractingSegment && !transcriptionMap.containsKey(transcriptionTimestamp) && currentTranscribeSegment == transcriptionTimestamp) {
 
                     val timestamp = withContext(Dispatchers.Main) {
-                        binding.timelinePosition.text.toString()
+                        timelineAudioPosition.formatElapsedTime()
                     }
                     val duration = segmentLength
 
@@ -1578,6 +1592,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         audioNavigator = readerInitData.getOrNull()!!
         audioPublication = audioPublicationLoader
 
+        // The times are shown at the chosen speed: refresh them when it changes, even while paused
+        audioPreferences?.let { preferences ->
+            viewLifecycleOwner.lifecycleScope.launch {
+                preferences.collect { if (seekingItem == null) updateTimeline(audioNavigator.playback.value) }
+            }
+        }
+
         totalTimeOfAudio =
             audioNavigator.readingOrder.items[0].duration?.formatElapsedTime().toString()
 
@@ -1695,7 +1716,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         model.viewModelScope.launch {
             clearPlacements()
             binding.loadingOverlay.visibility = View.VISIBLE
-            val playbackTime = binding.timelinePosition.text.toString()
+            val playbackTime = timelineAudioPosition.formatElapsedTime()
             val currentTime = roundDownToSlot(playbackTime)
 
             // Tell the tracker the narrator is at the first visible paragraph right now
