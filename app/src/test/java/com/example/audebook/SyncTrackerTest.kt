@@ -214,6 +214,45 @@ class SyncTrackerTest {
     }
 
     @Test
+    fun picksTheRepeatedPhraseTheNarratorIsAt() {
+        // The same short line a few times on nearby pages, like a crowd chanting between bits of
+        // dialogue. Whichever copy the narrator reaches, that's the one to highlight.
+        val chant = listOf("glurp", "glurp", "glurp", "glurp")
+        val copies = listOf(900, 1_000, 1_100)
+        for (target in copies) {
+            val book = SyntheticBook(Random(19), phrases = copies.associateWith { chant })
+            val narrator = Narrator(book, start = BookPosition(0, target - 52), wordsPerSecond = 2.6)
+            val tracker = SyncTracker(book.index)
+            tracker.anchor(0, narrator.positionAt(0))
+            val random = Random(20)
+            for (slot in 0 until 2) {
+                tracker.place(slot * slotSeconds, slotSeconds, narrator.transcript(slot * slotSeconds, slotSeconds, random))
+            }
+
+            // All Whisper caught in this slot was the chant (repeated words blur its start by one)
+            val chanted = tracker.place(20, slotSeconds, "Glurp, glurp! Glurp, glurp!")!!
+            assertTrue("chant at $target placed at ${chanted.start}", abs(chanted.start.word - target) <= 1)
+
+            // and the slots after it carry on from there, not from another copy of it
+            val next = tracker.place(30, slotSeconds, narrator.transcript(30, slotSeconds, random))!!
+            assertEquals(SyncTracker.Kind.MATCHED, next.kind)
+            assertTrue("after the chant at $target", narrator.isWithin(next.start, 30, 6))
+        }
+    }
+
+    @Test
+    fun aRepeatedPhraseIsNotAClearMatch() {
+        val chant = listOf("glurp", "glurp", "glurp", "glurp")
+        val book = SyntheticBook(Random(21), phrases = mapOf(1_000 to chant, 1_100 to chant))
+        val aligner = TranscriptAligner(book.index)
+        for ((near, expected) in listOf(1_010 to 1_000, 1_090 to 1_100)) {
+            val match = aligner.search(chant, aligner.everywhere(), near = BookPosition(0, near))!!
+            assertTrue("near $near placed at ${match.start}", abs(match.start.word - expected) <= 1)
+            assertTrue("an ambiguous match looked certain", !match.isClearWinner)
+        }
+    }
+
+    @Test
     fun indexesABookQuickly() {
         // About the length of a long novel: 20 chapters of 8,000 words
         val random = Random(18)
@@ -232,7 +271,9 @@ class SyncTrackerTest {
         random: Random,
         chapters: Int = 4,
         wordsPerChapter: Int = 8_000,
-        index: Boolean = true
+        index: Boolean = true,
+        // Fixed words written into chapter 0 at these word numbers
+        phrases: Map<Int, List<String>> = emptyMap()
     ) {
         val index = BookIndex<String>()
         val chapterCount = chapters
@@ -244,7 +285,11 @@ class SyncTrackerTest {
                 weights[i] = total
             }
         }
-        private val words: List<List<String>> = List(chapters) { List(wordsPerChapter) { randomWord(random) } }
+        private val words: List<List<String>> = List(chapters) { c ->
+            MutableList(wordsPerChapter) { randomWord(random) }.also { chapter ->
+                if (c == 0) phrases.forEach { (at, phrase) -> phrase.forEachIndexed { i, w -> chapter[at + i] = w } }
+            }
+        }
         val chapterElements: List<List<BookIndex.Element<String>>> = words.mapIndexed { c, chapterWords ->
             chapterWords.chunked(60).mapIndexed { p, paragraph ->
                 val text = paragraph.mapIndexed { i, w -> if (i == 0) w.replaceFirstChar { it.uppercase() } else w }
