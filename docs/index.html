@@ -3,10 +3,542 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AudEBook</title>
-<meta http-equiv="refresh" content="0; url=privacy-policy.html">
+<title>AudEBook: read along with your audiobook</title>
+<meta name="description" content="AudEBook is a free Android app that syncs an audiobook with its eBook, highlighting every word as the narrator reads it. Everything runs on your phone.">
+<meta property="og:title" content="AudEBook: read along with your audiobook">
+<meta property="og:description" content="Sync an audiobook with its eBook on Android. Every word highlighted as it's read, all on your phone.">
+<meta property="og:image" content="https://farhannibal.github.io/AudEbook/play-store/feature-graphic-1024x500.png">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/png" href="play-store/icon-512.png">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #fff6ef;
+    --surface: #ffffff;
+    --text: #1f2328;
+    --muted: #59636e;
+    --rule: #ead9cc;
+    --accent: #e2502a;
+    --accent-strong: #c9401c;
+    --accent-soft: #fde7dc;
+    --on-accent: #ffffff;
+    --shadow: 0 10px 30px rgba(120, 50, 10, .12);
+    --placeholder: #f3ebe4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121014;
+      --bg-soft: #1b1714;
+      --surface: #1e1a18;
+      --text: #f1ece8;
+      --muted: #b3a9a1;
+      --rule: #3a312c;
+      --accent: #f7882a;
+      --accent-strong: #ff9a45;
+      --accent-soft: #3a2518;
+      --on-accent: #1b0f06;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+      --placeholder: #2a2320;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: var(--accent); }
+  .wrap { max-width: 68rem; margin: 0 auto; padding: 0 1rem; }
+  section { padding: 4rem 0; }
+  section.soft { background: var(--bg-soft); }
+  h1, h2, h3 { line-height: 1.2; margin: 0 0 .75rem; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); }
+  h3 { font-size: 1.15rem; }
+  p { margin: 0 0 1rem; }
+  .lead { font-size: 1.15rem; color: var(--muted); max-width: 40rem; }
+  .center { text-align: center; }
+  .center .lead { margin-left: auto; margin-right: auto; }
+
+  /* Top bar */
+  header.bar {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--rule);
+  }
+  header.bar .wrap { display: flex; align-items: center; gap: 1rem; height: 3.75rem; }
+  .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; }
+  .brand img { width: 2rem; height: 2rem; border-radius: 50%; }
+  nav.links { margin-left: auto; display: flex; gap: 1.25rem; }
+  nav.links a { color: var(--muted); text-decoration: none; font-size: .95rem; }
+  nav.links a:hover { color: var(--text); }
+  @media (max-width: 720px) { nav.links { display: none; } }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .8rem 1.3rem; border-radius: 999px;
+    font-weight: 600; text-decoration: none; font-size: 1rem;
+    border: 2px solid var(--accent);
+  }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+  .btn.ghost { color: var(--accent); background: transparent; }
+  .btn.small { padding: .45rem .95rem; font-size: .9rem; }
+  .buttons { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.5rem 0 .75rem; }
+  .fine { font-size: .9rem; color: var(--muted); }
+
+  /* Hero */
+  .hero { padding: 4.5rem 0 3.5rem; background: linear-gradient(180deg, var(--bg-soft), var(--bg)); }
+  .hero .wrap { display: grid; grid-template-columns: 1.15fr .85fr; gap: 3rem; align-items: center; }
+  .hero h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); letter-spacing: -.02em; }
+  .hero h1 span { color: var(--accent); }
+  .hero .phone { max-width: 19rem; justify-self: center; }
+  @media (max-width: 860px) {
+    .hero .wrap { grid-template-columns: 1fr; gap: 2.5rem; }
+    .hero .phone { max-width: 16rem; }
+  }
+
+  /* Phone frame for screenshots */
+  .phone {
+    border-radius: 2rem; padding: .55rem; background: #111;
+    box-shadow: var(--shadow);
+  }
+  .phone img { border-radius: 1.55rem; width: 100%; }
+  .phone.landscape { border-radius: 1.6rem; }
+  .phone.landscape img { border-radius: 1.15rem; }
+
+  /* Placeholders for media still to be recorded */
+  .placeholder {
+    display: grid; place-items: center; text-align: center;
+    background: var(--placeholder);
+    border: 2px dashed var(--rule);
+    border-radius: 1rem; color: var(--muted);
+    padding: 1.5rem;
+  }
+  .placeholder strong { display: block; color: var(--text); margin-bottom: .25rem; }
+  .video { aspect-ratio: 16 / 9; max-width: 52rem; margin: 2rem auto 0; }
+  .play-icon {
+    width: 4rem; height: 4rem; border-radius: 50%; margin: 0 auto .75rem;
+    background: var(--accent); display: grid; place-items: center;
+  }
+  .play-icon::after {
+    content: ""; margin-left: .3rem;
+    border-left: 1.1rem solid var(--on-accent);
+    border-top: .7rem solid transparent; border-bottom: .7rem solid transparent;
+  }
+
+  /* Feature cards */
+  .grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)); margin-top: 2rem; }
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 1rem; padding: 1.4rem;
+  }
+  .card p { color: var(--muted); margin: 0; font-size: .97rem; }
+  .icon {
+    width: 2.6rem; height: 2.6rem; border-radius: .8rem;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; margin-bottom: .9rem;
+  }
+  .icon svg { width: 1.4rem; height: 1.4rem; }
+
+  /* How it works */
+  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 2rem; counter-reset: flow; }
+  .flow .card { position: relative; padding-top: 2.6rem; }
+  .flow .card::before {
+    counter-increment: flow; content: counter(flow);
+    position: absolute; top: -1rem; left: 1.4rem;
+    width: 2.2rem; height: 2.2rem; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent);
+    display: grid; place-items: center; font-weight: 700;
+  }
+  @media (max-width: 760px) { .flow { grid-template-columns: 1fr; gap: 2rem; } }
+
+  /* Getting started */
+  .start { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 2rem; align-items: start; }
+  @media (max-width: 860px) { .start { grid-template-columns: 1fr; } }
+  .checklist { list-style: none; padding: 0; margin: 0 0 1.5rem; }
+  .checklist li { padding-left: 1.9rem; position: relative; margin-bottom: .6rem; }
+  .checklist li::before {
+    content: ""; position: absolute; left: 0; top: .35rem;
+    width: 1.1rem; height: 1.1rem; border-radius: 50%;
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 .3rem var(--accent);
+  }
+  .tree {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 1rem;
+    padding: 1.1rem 1.3rem; font: .95rem/1.75 ui-monospace, SFMono-Regular, Consolas, monospace;
+    overflow-x: auto; white-space: pre; margin: 0 0 1rem;
+  }
+  .tree .dim { color: var(--muted); }
+  ol.steps { padding: 0; margin: 0; list-style: none; counter-reset: step; }
+  ol.steps > li { position: relative; padding: 0 0 1.4rem 3rem; }
+  ol.steps > li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 0;
+    width: 2rem; height: 2rem; border-radius: 50%;
+    border: 2px solid var(--accent); color: var(--accent);
+    display: grid; place-items: center; font-weight: 700; font-size: .95rem;
+  }
+  ol.steps h3 { margin-bottom: .3rem; padding-top: .15rem; }
+  ol.steps p { color: var(--muted); margin: 0; }
+  .note {
+    border-left: 4px solid var(--accent); background: var(--accent-soft);
+    padding: .9rem 1.1rem; border-radius: 0 .75rem .75rem 0; margin: 1.5rem 0 0;
+  }
+  .note p { margin: 0; }
+  .clip { aspect-ratio: 9 / 16; max-width: 15rem; margin: 1.5rem 0 0; font-size: .92rem; }
+
+  /* Screenshots */
+  .shots { display: grid; grid-template-columns: 1fr 1.9fr 1fr; gap: 1.5rem; align-items: center; margin-top: 2.5rem; }
+  .shots figure { margin: 0; }
+  .shots figcaption { text-align: center; color: var(--muted); font-size: .92rem; margin-top: .75rem; }
+  @media (max-width: 860px) {
+    .shots { grid-template-columns: 1fr 1fr; }
+    .shots .wide { grid-column: 1 / -1; order: -1; }
+  }
+
+  /* FAQ */
+  .faq { max-width: 48rem; margin: 2rem auto 0; }
+  details { border-bottom: 1px solid var(--rule); padding: 1rem 0; }
+  summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 1rem; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--accent); font-size: 1.3rem; line-height: 1; }
+  details[open] summary::after { content: "\2212"; }
+  details p { color: var(--muted); margin: .75rem 0 0; }
+
+  /* Download band and footer */
+  .cta { background: linear-gradient(135deg, #f7882a, #e2502a); color: #fff; }
+  .cta .lead { color: rgba(255, 255, 255, .92); }
+  .cta .btn.primary { background: #fff; color: #c9401c; border-color: #fff; }
+  .cta .btn.ghost { color: #fff; border-color: rgba(255, 255, 255, .8); }
+  .cta .fine { color: rgba(255, 255, 255, .85); }
+  footer { padding: 2.5rem 0; border-top: 1px solid var(--rule); color: var(--muted); font-size: .92rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; }
+  footer nav { display: flex; flex-wrap: wrap; gap: 1.25rem; }
+  footer a { color: var(--muted); }
+</style>
 </head>
 <body>
-<p><a href="privacy-policy.html">AudEBook Privacy Policy</a></p>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="play-store/icon-512.png" alt="">AudEBook</a>
+    <nav class="links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#start">Get started</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="btn primary small" href="#download">Download</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <h1>Read along with your audiobook. <span>Every word, in sync.</span></h1>
+        <p class="lead">AudEBook plays your audiobook and highlights each word in the eBook as the
+        narrator reads it, so you can listen, read, or switch between the two without losing
+        your place.</p>
+        <div class="buttons">
+          <a class="btn primary" href="#download">Get the app</a>
+          <a class="btn ghost" href="#start">How to get started</a>
+        </div>
+        <p class="fine">Free for Android. Works offline. Your books never leave your phone.</p>
+      </div>
+      <div class="phone">
+        <img src="play-store/screenshots/1-reader-sync.png" width="1080" height="1920"
+          alt="AudEBook highlighting the passage being read in Alice's Adventures in Wonderland, with the current word marked">
+      </div>
+    </div>
+  </section>
+
+  <section id="demo">
+    <div class="wrap center">
+      <h2>See it in action</h2>
+      <p class="lead">A quick look at a book and its audiobook playing together.</p>
+      <!--
+        DEMO VIDEO PLACEHOLDER
+        Replace the whole <div class="placeholder video"> below with either:
+          a YouTube embed:
+            <iframe class="video" style="width:100%;border:0;border-radius:1rem"
+              src="https://www.youtube-nocookie.com/embed/VIDEO_ID"
+              title="AudEBook demo" allowfullscreen></iframe>
+          or a video file saved in docs/media/ (keep it small, under ~20 MB):
+            <video class="video" style="width:100%;border-radius:1rem" controls playsinline
+              poster="play-store/feature-graphic-1024x500.png" src="media/demo.mp4"></video>
+        Suggested: a 30 to 60 second screen recording of a book playing, with the highlight
+        moving and the page scrolling along.
+      -->
+      <div class="placeholder video" role="img" aria-label="Demo video coming soon">
+        <div>
+          <div class="play-icon" aria-hidden="true"></div>
+          <strong>Demo video coming soon</strong>
+          A short recording of AudEBook following a narrator, word by word.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="soft">
+    <div class="wrap">
+      <div class="center">
+        <h2>Built for reading and listening together</h2>
+        <p class="lead">Bring a DRM-free eBook and its audiobook. AudEBook works out where the
+        narrator is and keeps the text in step.</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M4 12h16M4 17h7"/><rect x="13" y="15" width="7" height="4" rx="1" fill="currentColor" stroke="none"/></svg></div>
+          <h3>Word-by-word highlighting</h3>
+          <p>The passage being read is highlighted, and a cursor follows the narrator from word to word.</p>
+        </div>
+        <div class="card">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></div>
+          <h3>Finds its own place</h3>
+          <p>Start the audio anywhere. AudEBook listens and finds the matching spot in the book by itself.</p>
+        </div>
+        <div class="card">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v16M7 15l5 5 5-5"/></svg></div>
+          <h3>Scrolls with the narrator</h3>
+          <p>The page keeps the current word comfortably in view, at any font size and in portrait or landscape. Scroll by hand and it waits for you.</p>
+        </div>
+        <div class="card">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 13l4-3M12 3v2"/></svg></div>
+          <h3>Any speed</h3>
+          <p>Speed it up to as much as 5x and the sync keeps up. Times are shown at your speed, so a 12-hour book at 2x reads 6 hours.</p>
+        </div>
+        <div class="card">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+          <h3>Chapter files as one book</h3>
+          <p>An audiobook split into one file per chapter plays as a single book, with one timeline and no gaps in the sync.</p>
+        </div>
+        <div class="card">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+          <h3>Private by design</h3>
+          <p>Speech recognition runs on your phone. No accounts, ads or tracking, and nothing is uploaded.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="center">
+        <h2>How it works</h2>
+        <p class="lead">No pre-made sync files are needed. AudEBook works it out as you listen.</p>
+      </div>
+      <div class="flow">
+        <div class="card">
+          <h3>It listens ahead</h3>
+          <p>While the audiobook plays, AudEBook transcribes the next few seconds of narration with
+          a speech recognition model (OpenAI's Whisper) that runs entirely on your phone.</p>
+        </div>
+        <div class="card">
+          <h3>It finds the words</h3>
+          <p>Each transcribed piece is matched against the eBook's text, so it knows exactly which
+          sentence the narrator has reached, and learns the narrator's pace as it goes.</p>
+        </div>
+        <div class="card">
+          <h3>You read along</h3>
+          <p>The matching text is highlighted and the page scrolls to keep it in view. Pause,
+          skip, seek or change speed and it follows.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="start" class="soft">
+    <div class="wrap">
+      <div class="center">
+        <h2>Get started</h2>
+        <p class="lead">Setting up a book takes about a minute.</p>
+      </div>
+      <div class="start">
+        <div>
+          <h3>What you need</h3>
+          <ul class="checklist">
+            <li>An Android phone running Android 8.0 or newer (64-bit, as nearly all recent phones are).</li>
+            <li>An eBook in <strong>EPUB</strong> format, without DRM.</li>
+            <li>The same book as an audiobook, without DRM: one file (MP3, M4B, M4A, OGG, FLAC and more) or one file per chapter.</li>
+            <li>An <strong>English</strong> recording of the same edition, or close to it.</li>
+          </ul>
+
+          <h3>Tip: keep each book in its own folder</h3>
+          <p>Put the eBook and its audio files together in one folder. AudEBook can then add both
+          in one step, and it plays chapter files in order by their names.</p>
+          <div class="tree" aria-label="Example folder layout"><span class="dim">Audiobooks/</span>
+└── Alice in Wonderland/
+    ├── alice-in-wonderland.epub
+    ├── chapter_01.mp3
+    ├── chapter_02.mp3
+    ├── <span class="dim">…</span>
+    └── chapter_12.mp3</div>
+          <p class="fine">Number your files with leading zeros or plain numbers ("Chapter 2" comes
+          before "Chapter 10" either way). Files in subfolders aren't included.</p>
+        </div>
+
+        <div>
+          <h3>Set up a book</h3>
+          <ol class="steps">
+            <li>
+              <h3>Add the book</h3>
+              <p>Tap <strong>+</strong> on the bookshelf and choose <strong>A folder with the
+              eBook and its audiobook in it together</strong>. Pick the book's folder and allow
+              access.</p>
+            </li>
+            <li>
+              <h3>Or add them separately</h3>
+              <p>If the audio is stored somewhere else, choose <strong>An eBook (EPUB file) on its
+              own</strong>, open the book, then tap <strong>Load Audio Book</strong> and pick the
+              audio file or its folder.</p>
+            </li>
+            <li>
+              <h3>Press play</h3>
+              <p>Open the book and play. Within a few seconds the text the narrator is reading is
+              highlighted and the page starts following along.</p>
+            </li>
+            <li>
+              <h3>Nudge it with Anchor if needed</h3>
+              <p>If the highlight ever lands in the wrong place, scroll to the paragraph being
+              read and tap the <strong>anchor</strong> button. AudEBook resyncs from there.</p>
+            </li>
+          </ol>
+          <!--
+            SETUP CLIP PLACEHOLDER (optional)
+            Replace with a short portrait screen recording of adding a book folder, e.g.:
+              <video class="clip" style="width:100%;border-radius:1rem" autoplay muted loop playsinline
+                src="media/add-book-folder.mp4"></video>
+          -->
+          <div class="placeholder clip" role="img" aria-label="Setup walkthrough coming soon">
+            <div>
+              <strong>Setup walkthrough coming soon</strong>
+              A short clip of adding a book folder.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <p><strong>Looking for books to try?</strong> Public-domain classics are a great start:
+        get the eBook from <a href="https://standardebooks.org/">Standard Ebooks</a> and a free
+        recording of the same title from <a href="https://librivox.org/">LibriVox</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <div class="center">
+        <h2>Made to stay out of the way</h2>
+        <p class="lead">A dark theme and scrolling text by default, simple controls, and the font
+        settings right where you expect them.</p>
+      </div>
+      <div class="shots">
+        <figure>
+          <div class="phone"><img src="play-store/screenshots/5-reader-sync-alt.png" width="1080" height="1920" loading="lazy"
+            alt="The reader following the narrator further into the chapter"></div>
+          <figcaption>Follows the narrator</figcaption>
+        </figure>
+        <figure class="wide">
+          <div class="phone landscape"><img src="play-store/screenshots/2-reader-landscape.png" width="1920" height="1080" loading="lazy"
+            alt="The reader in landscape, with the audio controls on a single row"></div>
+          <figcaption>Portrait or landscape</figcaption>
+        </figure>
+        <figure>
+          <div class="phone"><img src="play-store/screenshots/3-font-settings.png" width="1080" height="1920" loading="lazy"
+            alt="Reader settings with typeface and font size at the top"></div>
+          <figcaption>Your fonts, your size</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="soft">
+    <div class="wrap">
+      <div class="center">
+        <h2>Questions</h2>
+      </div>
+      <div class="faq">
+        <details>
+          <summary>Does it work with Audible, Kindle or other store purchases?</summary>
+          <p>Not usually. Books from most stores are protected with DRM, which stops other apps
+          from opening them. AudEBook needs DRM-free files: books you own as plain EPUB and audio
+          files, from DRM-free stores, or from the public domain.</p>
+        </details>
+        <details>
+          <summary>Which languages are supported?</summary>
+          <p>English for now. The on-device speech recognition model is an English one, so the
+          audiobook needs to be narrated in English.</p>
+        </details>
+        <details>
+          <summary>Does the eBook have to match the audiobook exactly?</summary>
+          <p>No. AudEBook matches what it hears against the text and copes with small differences,
+          such as a narrator's introduction or a slightly different edition. Abridged recordings
+          and heavily edited editions sync less well.</p>
+        </details>
+        <details>
+          <summary>Does it need an internet connection?</summary>
+          <p>No. Transcription and syncing happen on your phone. The internet is only used if you
+          choose to browse an online book catalog.</p>
+        </details>
+        <details>
+          <summary>The highlight is in the wrong place. What do I do?</summary>
+          <p>Scroll to the paragraph the narrator is reading and tap the anchor button. AudEBook
+          takes that as the new starting point and carries on from there.</p>
+        </details>
+        <details>
+          <summary>What about battery life?</summary>
+          <p>AudEBook only transcribes a little ahead of what's playing, and stops while you're
+          paused. Each part of a book is transcribed once and remembered, so rereading or
+          relistening costs nothing extra.</p>
+        </details>
+        <details>
+          <summary>Can I install the GitHub version and the Google Play version together?</summary>
+          <p>They're signed differently, so one can't update the other. To switch, uninstall the
+          version you have first, then install the other and add your books again.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="download" class="cta">
+    <div class="wrap center">
+      <h2>Start reading along</h2>
+      <p class="lead">AudEBook is free, with no ads or accounts.</p>
+      <div class="buttons" style="justify-content:center">
+        <!--
+          GOOGLE PLAY PLACEHOLDER
+          Once the app is public on Google Play, replace this link's href with
+          https://play.google.com/store/apps/details?id=com.farhannibal.audebook
+          and its text with "Get it on Google Play" (or use Google's official badge image).
+        -->
+        <a class="btn primary" href="#download" aria-disabled="true">Coming soon to Google Play</a>
+        <a class="btn ghost" href="https://github.com/Farhannibal/AudEbook/releases/latest">Download the APK from GitHub</a>
+      </div>
+      <p class="fine">The APK is for Android 8.0 or newer on 64-bit phones. Open it on your phone
+      and allow installing from that source when Android asks.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>&copy; 2026 AudEBook. Speech recognition by OpenAI Whisper, running on LiteRT.</div>
+    <nav>
+      <a href="privacy-policy.html">Privacy policy</a>
+      <a href="https://github.com/Farhannibal/AudEbook">GitHub</a>
+      <a href="https://github.com/Farhannibal/AudEbook/issues">Report a problem</a>
+    </nav>
+  </div>
+</footer>
+
 </body>
 </html>
