@@ -46,6 +46,9 @@ sealed class ImportError(
     class InconsistentState(override val cause: DebugError) :
         ImportError(cause)
 
+    /** A book folder was picked that has no EPUB in it. */
+    class NoBookInFolder : ImportError(null)
+
     fun toUserError(): UserError = when (this) {
         is Database -> UserError(R.string.import_publication_unable_add_pub_database, cause = this)
         is Download -> UserError(R.string.import_publication_download_failed, cause = this)
@@ -53,6 +56,7 @@ sealed class ImportError(
         is Publication -> cause.toUserError()
         is FileSystem -> cause.toUserError()
         is ContentResolver -> cause.toUserError()
+        is NoBookInFolder -> UserError(R.string.import_folder_no_epub, cause = this)
         is InconsistentState -> UserError(
             R.string.import_publication_inconsistent_state,
             cause = this

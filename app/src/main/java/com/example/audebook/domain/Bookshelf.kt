@@ -6,12 +6,15 @@
 
 package com.example.audebook.domain
 
+import android.content.Context
 import android.net.Uri
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.util.AbsoluteUrl
 import org.readium.r2.shared.util.DebugError
@@ -24,6 +27,7 @@ import org.readium.r2.shared.util.toUrl
 import org.readium.r2.streamer.PublicationOpener
 import com.example.audebook.data.BookRepository
 import com.example.audebook.data.model.Book
+import com.example.audebook.utils.AudiobookFolder
 import com.example.audebook.utils.tryOrLog
 import timber.log.Timber
 
@@ -95,6 +99,32 @@ class Bookshelf(
         }
     }
 
+    /**
+     * Adds the EPUB in a folder the user picked, with the folder's audio files as its audiobook
+     * (see [AudiobookFolder]), so a book kept together with its audiobook is ready to play
+     * without picking the audiobook separately. Without audio files, just the book is added.
+     */
+    fun addBookFolder(context: Context, treeUri: Uri) {
+        coroutineScope.launch {
+            val epub = withContext(Dispatchers.IO) { AudiobookFolder.epub(context, treeUri) }
+            if (epub == null) {
+                channel.send(Event.ImportPublicationError(ImportError.NoBookInFolder()))
+                return@launch
+            }
+            val bookId = addBook(epub.toUrl() as AbsoluteUrl).getOrElse {
+                channel.send(Event.ImportPublicationError(it))
+                return@launch
+            }
+            val audiobook = withContext(Dispatchers.IO) {
+                AudiobookFolder.open(context, treeUri, AudiobookFolder.name(context, treeUri))
+            }
+            if (audiobook != null) {
+                bookRepository.insertAudioBook(treeUri.toUrl()!!, AudiobookFolder.MEDIA_TYPE, audiobook, bookId)
+            }
+            channel.send(Event.ImportPublicationSuccess)
+        }
+    }
+
     private suspend fun addBookFeedback(
         retrieverResult: Try<PublicationRetriever.Result, ImportError>
     ) {
@@ -118,7 +148,7 @@ class Bookshelf(
         url: AbsoluteUrl,
         format: Format? = null,
         coverUrl: AbsoluteUrl? = null
-    ): Try<Unit, ImportError> {
+    ): Try<Long, ImportError> {
         val asset =
             if (format == null) {
                 assetRetriever.retrieve(url)
@@ -130,6 +160,7 @@ class Bookshelf(
                 )
             }
 
+        var bookId = -1L
         publicationOpener.open(
             asset,
             allowUserInteraction = false
@@ -158,6 +189,7 @@ class Bookshelf(
                     )
                 )
             }
+            bookId = id
         }
             .onFailure {
                 Timber.e("Cannot open publication: $it.")
@@ -166,7 +198,7 @@ class Bookshelf(
                 )
             }
 
-        return Try.success(Unit)
+        return Try.success(bookId)
     }
 
     suspend fun deleteBook(book: Book) {

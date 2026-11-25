@@ -31,7 +31,24 @@ object AudiobookFolder {
     class Track(val name: String, val uri: Uri, val mediaType: MediaType)
 
     /** The folder's audio files in play order. */
-    fun tracks(context: Context, treeUri: Uri): List<Track> {
+    fun tracks(context: Context, treeUri: Uri): List<Track> =
+        files(context, treeUri)
+            .mapNotNull { (name, uri, mimeType) ->
+                audioMediaType(name, mimeType)?.let { Track(name, uri, it) }
+            }
+            .sortedWith(compareBy(AudiobookTimeline.naturalOrder) { it.name })
+
+    /** The eBook in the folder: its first EPUB by file name, or null if there is none. */
+    fun epub(context: Context, treeUri: Uri): Uri? =
+        files(context, treeUri)
+            .filter { (name, _, mimeType) ->
+                mimeType == EPUB_MEDIA_TYPE || name.endsWith(".epub", ignoreCase = true)
+            }
+            .minWithOrNull(compareBy(AudiobookTimeline.naturalOrder) { it.first })
+            ?.second
+
+    // The files directly in the folder (not in subfolders): name, document URI and MIME type
+    private fun files(context: Context, treeUri: Uri): List<Triple<String, Uri, String?>> {
         val children = DocumentsContract.buildChildDocumentsUriUsingTree(
             treeUri,
             DocumentsContract.getTreeDocumentId(treeUri)
@@ -41,20 +58,21 @@ object AudiobookFolder {
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_MIME_TYPE
         )
-        val tracks = mutableListOf<Track>()
+        val files = mutableListOf<Triple<String, Uri, String?>>()
         try {
             context.contentResolver.query(children, projection, null, null, null)?.use { cursor ->
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(1) ?: continue
-                    val mediaType = audioMediaType(name, cursor.getString(2)) ?: continue
+                    val mimeType = cursor.getString(2)
+                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) continue
                     val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(0))
-                    tracks += Track(name, uri, mediaType)
+                    files += Triple(name, uri, mimeType)
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Cannot list the audiobook folder $treeUri")
+            Timber.e(e, "Cannot list the folder $treeUri")
         }
-        return tracks.sortedWith(compareBy(AudiobookTimeline.naturalOrder) { it.name })
+        return files
     }
 
     /** The folder as an audiobook publication, or null if it has no audio files. */
@@ -93,10 +111,11 @@ object AudiobookFolder {
 
     // Some providers report audio files by extension only, as application/octet-stream
     private fun audioMediaType(name: String, mimeType: String?): MediaType? {
-        if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) return null
         mimeType?.takeIf { it.startsWith("audio/") }?.let { MediaType(it) }?.let { return it }
         return AUDIO_EXTENSIONS[name.substringAfterLast('.', "").lowercase()]?.let { MediaType(it) }
     }
+
+    private const val EPUB_MEDIA_TYPE = "application/epub+zip"
 
     private val AUDIO_EXTENSIONS = mapOf(
         "mp3" to "audio/mpeg",
