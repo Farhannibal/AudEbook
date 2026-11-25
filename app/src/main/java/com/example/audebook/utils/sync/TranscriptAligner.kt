@@ -50,7 +50,7 @@ class TranscriptAligner<E>(private val index: BookIndex<E>) {
     }
 
     /** The best place for [words] within [ranges], or null if no three-word sequence matches. */
-    fun search(words: List<String>, ranges: List<Range>): Match? {
+    fun search(words: List<String>, ranges: List<Range>, near: BookPosition? = null): Match? {
         if (words.size < 3 || ranges.isEmpty()) return null
         val hashes = IntArray(words.size) { words[it].hashCode() }
 
@@ -82,7 +82,25 @@ class TranscriptAligner<E>(private val index: BookIndex<E>) {
         fun smoothed(chapter: Int, bucket: Int) =
             (bucket - 1..bucket + 1).sumOf { votes[chapter to it] ?: 0.0 }
 
-        val best = votes.keys.maxByOrNull { (chapter, bucket) -> smoothed(chapter, bucket) } ?: return null
+        val topScore = votes.keys.maxOfOrNull { (chapter, bucket) -> smoothed(chapter, bucket) } ?: return null
+        // A phrase repeated nearby ("Glurp, glurp!") scores the same in each place it appears:
+        // of the places scoring about as well as the top one, take the one nearest [near]
+        // Only the peak of each place counts, not the buckets just beside it
+        fun isPeak(chapter: Int, bucket: Int): Boolean {
+            val score = smoothed(chapter, bucket)
+            return (bucket - NEIGHBOURHOOD_BUCKETS..bucket + NEIGHBOURHOOD_BUCKETS).none { other ->
+                other != bucket && (chapter to other) in votes &&
+                    smoothed(chapter, other).let { it > score || (it == score && other < bucket) }
+            }
+        }
+        val best = votes.keys
+            .filter { (chapter, bucket) -> smoothed(chapter, bucket) >= topScore * TIE_RATIO && isPeak(chapter, bucket) }
+            .minWithOrNull(
+                compareBy<Pair<Int, Int>> { (chapter, bucket) -> distanceFrom(near, chapter, bucket) }
+                    .thenByDescending { (chapter, bucket) -> smoothed(chapter, bucket) }
+                    .thenBy { it.first }
+                    .thenBy { it.second }
+            ) ?: return null
         val bestScore = smoothed(best.first, best.second)
         val runnerUp = votes.keys
             .filter { (chapter, bucket) -> chapter != best.first || kotlin.math.abs(bucket - best.second) > NEIGHBOURHOOD_BUCKETS }
@@ -100,9 +118,19 @@ class TranscriptAligner<E>(private val index: BookIndex<E>) {
         return Match(BookPosition(best.first, start), wordCount, bestScore, runnerUp)
     }
 
+    // Words from [near] to the start of a vote bucket; all the same when there's nothing to be near
+    private fun distanceFrom(near: BookPosition?, chapter: Int, bucket: Int): Int {
+        near ?: return 0
+        val start = BookPosition(chapter, (bucket * BUCKET_WORDS).coerceAtLeast(0))
+        return index.distance(near, start)?.let { kotlin.math.abs(it) } ?: Int.MAX_VALUE
+    }
+
     companion object {
         const val BUCKET_WORDS = 4
         const val NEIGHBOURHOOD_BUCKETS = 3
         const val CLEAR_WINNER_RATIO = 2.0
+
+        // Places scoring at least this share of the best score count as a tie
+        const val TIE_RATIO = 0.8
     }
 }

@@ -58,7 +58,7 @@ We thank all the maintainers and contributors of these excellent open-source pro
     <string name="instructions_title">How to Use</string>
 <string name="instructions_step1_title"><b>1. Import eBook, then Audiobook:</b></string>
 <string name="instructions_step1_line1">Open the app and tap on the Import (+) button.</string>
-<string name="instructions_step1_line2">Select a .epub file (<b>eBook must be selected FIRST</b>) and then when you open it, select the corresponding audiobook from your device storage.</string>
+<string name="instructions_step1_line2">Select a .epub file (<b>eBook must be selected FIRST</b>) and then when you open it, tap Load Audio Book and select its audiobook: a single file, or the folder holding its chapter files, which are played in order. If the eBook and its audiobook are in one folder, add that folder instead and both are added at once.</string>
 
 <string name="instructions_step2_title"><b>2. Start The Audiobook at your desired Position:</b></string>
 <string name="instructions_step2_line1">Go to the position of the EPUB that corresponds to the Audiobook</string>
@@ -136,6 +136,9 @@ We thank all the maintainers and contributors of these excellent open-source pro
     <string name="confirm_delete_catalog_text">Are you sure you want to delete this Catalog feed?</string>
 
     <string name="add_book">Add a Book</string>
+    <string name="add_book_epub_file">An eBook (EPUB file) on its own</string>
+    <string name="add_book_folder">A folder with the eBook and its audiobook in it together</string>
+    <string name="import_folder_no_epub">No EPUB in that folder. Put the book and its audiobook in one folder.</string>
     <string name="add_catalog">Add an Catalog Feed</string>
     <string name="ok">OK</string>
     <string name="save">Save</string>
@@ -149,6 +152,10 @@ We thank all the maintainers and contributors of these excellent open-source pro
     <string name="return_button">Return</string>
 
     <string name="opening_publication_cannot_render">Cannot render publication.</string>
+    <string name="audiobook_choose_title">Load audiobook</string>
+    <string name="audiobook_choose_folder">A folder of audio files (one per chapter)</string>
+    <string name="audiobook_choose_file">A single audio file</string>
+    <string name="audiobook_folder_empty">No audio files found in that folder</string>
     <string name="opening_publication_audio_engine_initialization">Could not open publication because audio engine initialization failed.</string>
 
     <string name="import_publication_unexpected_io_exception">Unable to add publication due to an unexpected error on your device</string>

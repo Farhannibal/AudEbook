@@ -8,7 +8,8 @@ import kotlin.math.abs
  *
  * It remembers confident matches (audio time -> book position) and learns the narrator's pace from
  * them, which predicts where the next slot should be. For each transcribed slot it:
- *  1. searches near the predicted position, and accepts a decent match there;
+ *  1. searches near the predicted position, and accepts a decent match there (the one nearest
+ *     the prediction when a line repeats nearby, which then doesn't count as a confident match);
  *  2. otherwise searches everything indexed, and accepts a strong, clear match there only once a
  *     second slot agrees with it, so one misheard slot can't drag the highlight away;
  *  3. otherwise falls back to the predicted position, so the highlight keeps moving.
@@ -85,9 +86,13 @@ class SyncTracker<E>(private val index: BookIndex<E>) {
             // Uncertainty grows with distance from the nearest confident match
             val gap = observations.keys.minOfOrNull { abs(it - slotSeconds) } ?: 0
             val slack = (LOCAL_WINDOW_WORDS + gap * wordsPerSecond * LOCAL_WINDOW_GROWTH).toInt()
-            val local = aligner.search(words, aligner.around(predicted, slack, slack + words.size))
+            val local = aligner.search(words, aligner.around(predicted, slack, slack + words.size), near = predicted)
             if (local != null && local.score >= MIN_LOCAL_SCORE) {
-                return accept(slotSeconds, local, Kind.MATCHED)
+                if (local.isClearWinner) return accept(slotSeconds, local, Kind.MATCHED)
+                // Fits just as well somewhere else nearby (a line repeated on nearby pages), so it
+                // went to the place nearest the prediction. Highlight it, but don't let it steer
+                // where the next slots are looked for.
+                return Placement(slotSeconds, local.start, local.endWord, Kind.MATCHED)
             }
         }
 

@@ -92,14 +92,21 @@ class BookIndexer(private val publication: Publication) {
         val elements = chapter.elements
 
         val wanted = Words.normalize(locator.text.highlight.orEmpty()).take(MATCH_WORDS)
+        val progression = locator.locations.progression
         var elementIndex = if (wanted.isNotEmpty()) {
-            elements.indexOfFirst { element ->
-                val words = Words.normalize(element.text).take(MATCH_WORDS)
+            val matching = elements.indices.filter { i ->
+                val words = Words.normalize(elements[i].text).take(MATCH_WORDS)
                 words.isNotEmpty() && (words == wanted.take(words.size) || wanted == words.take(wanted.size))
+            }
+            // A short paragraph can repeat in a chapter; take the copy nearest the reported position
+            if (progression != null && matching.size > 1) {
+                matching.minBy { kotlin.math.abs((elements[it].payload.locations.progression ?: 0.0) - progression) }
+            } else {
+                matching.firstOrNull() ?: -1
             }
         } else -1
         if (elementIndex < 0) {
-            val progression = locator.locations.progression ?: return BookPosition(number, 0)
+            progression ?: return BookPosition(number, 0)
             elementIndex = elements.indices.minByOrNull {
                 kotlin.math.abs((elements[it].payload.locations.progression ?: 0.0) - progression)
             } ?: return BookPosition(number, 0)
@@ -111,18 +118,42 @@ class BookIndexer(private val publication: Publication) {
     /** Readium locators covering a placement's words, one per paragraph, for highlighting. */
     fun locatorsFor(placement: SyncTracker.Placement): List<Locator> {
         val chapter = index.chapter(placement.start.chapter) ?: return emptyList()
+        val elements = chapter.elements
         return chapter.spans(placement.start.word, placement.endWord).map { span ->
             val text = span.element.text
+            val element = elements.indexOf(span.element)
             span.element.payload.copy(
                 text = Locator.Text(
-                    before = text.substring((span.charStart - CONTEXT_CHARS).coerceAtLeast(0), span.charStart)
-                        .takeIf { it.isNotEmpty() },
+                    before = contextBefore(elements, element, span.charStart),
                     highlight = text.substring(span.charStart, span.charEnd),
-                    after = text.substring(span.charEnd, (span.charEnd + CONTEXT_CHARS).coerceAtMost(text.length))
-                        .takeIf { it.isNotEmpty() }
+                    after = contextAfter(elements, element, span.charEnd)
                 )
             )
         }
+    }
+
+    // Readium's page script finds a highlight by its text and the text around it, so the context
+    // runs on into the neighbouring paragraphs: a short paragraph that repeats in the chapter
+    // ("Glurp, glurp!") has nothing else to tell its copies apart. Paragraphs are separated by a
+    // line break, as they are in the page's text.
+    private fun contextBefore(elements: List<BookIndex.Element<Locator>>, element: Int, charStart: Int): String? {
+        val context = StringBuilder(elements[element].text.substring(0, charStart))
+        var previous = element - 1
+        while (context.length < CONTEXT_CHARS && previous >= 0) {
+            context.insert(0, elements[previous].text + "\n")
+            previous--
+        }
+        return context.takeLast(CONTEXT_CHARS).toString().takeIf { it.isNotEmpty() }
+    }
+
+    private fun contextAfter(elements: List<BookIndex.Element<Locator>>, element: Int, charEnd: Int): String? {
+        val context = StringBuilder(elements[element].text.substring(charEnd))
+        var next = element + 1
+        while (context.length < CONTEXT_CHARS && next < elements.size) {
+            context.append("\n").append(elements[next].text)
+            next++
+        }
+        return context.take(CONTEXT_CHARS).toString().takeIf { it.isNotEmpty() }
     }
 
     /** The text of each paragraph in an HTML or XHTML chapter, in reading order. */

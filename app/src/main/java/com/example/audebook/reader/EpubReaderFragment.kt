@@ -28,6 +28,8 @@ import android.webkit.WebView
 import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.SeekBar
+import android.widget.Toast
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.ColorInt
@@ -98,7 +100,9 @@ import org.readium.r2.shared.util.getOrElse
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
 
-import com.example.audebook.utils.AudioSegmentExtractor
+import com.example.audebook.utils.AudiobookFolder
+import com.example.audebook.utils.AudiobookSegmentExtractor
+import com.example.audebook.utils.AudiobookTimeline
 import com.example.audebook.utils.ScrollFollower
 import com.example.audebook.utils.SpeedRamp
 import com.example.audebook.utils.sync.BookPosition
@@ -175,6 +179,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     private lateinit var appStoragePickerLauncher: ActivityResultLauncher<String>
     private lateinit var sharedStoragePickerLauncher: ActivityResultLauncher<Array<String>>
+    private lateinit var folderPickerLauncher: ActivityResultLauncher<Uri?>
 
     private val coroutineScope: CoroutineScope =
         MainScope()
@@ -242,8 +247,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     lateinit var audioDialog: AudioPreferencesBottomSheetDialogFragment
 
 
+    // The audiobook's tracks as one timeline: slots, the timeline bar and Anchor all use book
+    // time, so a book split into chapter files syncs like a single file
+    private var audioTimeline = AudiobookTimeline(emptyList())
+
     // Reads the audiobook in place; opened in loadAudiobookNavigator, closed in onDestroy
-    private var audioSegmentExtractor: AudioSegmentExtractor? = null
+    private var audioSegmentExtractor: AudiobookSegmentExtractor? = null
     private var isExtractingSegment = false
 
     // Two WAV files take turns so the next slot can be cut while Whisper reads the current one
@@ -273,6 +282,13 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
                 uri?.let {
                     requireContext().contentResolver.persistDocumentAccess(uri)
                     addPublicationFromStorage(it.toUrl()!! as AbsoluteUrl)
+                }
+            }
+        folderPickerLauncher =
+            registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+                uri?.let {
+                    requireContext().contentResolver.persistDocumentAccess(it)
+                    addAudiobookFolder(it)
                 }
             }
 
@@ -830,7 +846,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         Timber.v("onPlaybackChanged $playback")
         latestPlaybackStatus = playback
         // For the word cursor, which estimates the position between these updates
-        playbackOffsetMs = playback.offset.inWholeMilliseconds
+        playbackOffsetMs = audioTimeline.bookTime(playback.index, playback.offset).inWholeMilliseconds
         playbackOffsetAt = SystemClock.elapsedRealtime()
         val failureState = playback.state as? AudioNavigator.State.Failure<*>
         val endedState = playback.state as? AudioNavigator.State.Ended
@@ -841,6 +857,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         if (endedState != null) {
+            keepScreenOn(false)
             audioNavigator.close()
             model.viewModelScope.launch {
                 application.bookRepository.deleteAudiobookTranscript(epubBookId)
@@ -849,7 +866,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             clearPlacements()
             // The next audiobook has its own timeline
             syncTracker?.reset()
-            sharedStoragePickerLauncher.launch(arrayOf("*/*"))
+            chooseAudiobook()
             binding.loadAudioBook.visibility = View.VISIBLE
 
             return
@@ -860,10 +877,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         if (playback.playWhenReady && !wasPlaying) {
             startSpeedRamp()
             startWordCursor()
+            keepScreenOn(true)
         } else if (!playback.playWhenReady && wasPlaying) {
             speedRampJob?.cancel()
             // The cursor stays on the last word while paused
             stopWordCursor()
+            keepScreenOn(false)
         }
         wasPlaying = playback.playWhenReady
 
@@ -1193,8 +1212,9 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         return roundDownToSlot(timelineAudioPosition.formatElapsedTime())
     }
 
-    // Where the timeline is in the audio itself (the dragged position while seeking). The labels
-    // show times at the chosen speed instead, so slots are worked out from this, not the label.
+    // Where the timeline is in the book's audio (the dragged position while seeking), in book
+    // time across all its tracks. The labels show times at the chosen speed instead, so slots are
+    // worked out from this, not the label.
     private var timelineAudioPosition: Duration = Duration.ZERO
 
     /**
@@ -1207,14 +1227,16 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     private fun updateTimeline(
         playback: TimeBasedMediaNavigator.Playback
     ) {
-        val currentItem = audioNavigator.readingOrder.items[playback.index]
-        binding.timelineBar.max = currentItem.duration?.inWholeSeconds?.toInt() ?: 0
+        // The whole book, not just the track playing
+        val position = audioTimeline.bookTime(playback.index, playback.offset)
+        binding.timelineBar.max = audioTimeline.duration.inWholeSeconds.toInt()
         val speed = displaySpeed()
-        binding.timelineDuration.text = currentItem.duration?.div(speed)?.formatElapsedTime()
-        binding.timelineBar.progress = playback.offset.inWholeSeconds.toInt()
-        timelineAudioPosition = playback.offset
-        binding.timelinePosition.text = (playback.offset / speed).formatElapsedTime()
-        binding.timelineBar.secondaryProgress = playback.buffered?.inWholeSeconds?.toInt() ?: 0
+        binding.timelineDuration.text = (audioTimeline.duration / speed).formatElapsedTime()
+        binding.timelineBar.progress = position.inWholeSeconds.toInt()
+        timelineAudioPosition = position
+        binding.timelinePosition.text = (position / speed).formatElapsedTime()
+        binding.timelineBar.secondaryProgress = playback.buffered
+            ?.let { audioTimeline.bookTime(playback.index, it).inWholeSeconds.toInt() } ?: 0
     }
 
     private fun onPlayerError(error: ExoPlayerEngine.Error) {
@@ -1280,7 +1302,8 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     override fun onStopTrackingTouch(seekBar: SeekBar) {
         Timber.d("onStopTrackingTouch")
-        audioNavigator.skipTo(checkNotNull(seekingItem), seekBar.progress.seconds)
+        val (track, offset) = audioTimeline.trackAt(seekBar.progress.seconds)
+        audioNavigator.skipTo(track, offset)
         seekingItem = null
     }
 
@@ -1317,16 +1340,47 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     override fun onDestroyView() {
         (activity as? ReaderActivity)?.onAnyTouch = null
+        keepScreenOn(false)
         super.onDestroyView()
+    }
+
+    /**
+     * Keeps the screen awake while the audiobook plays, so the page stays readable as it follows
+     * the narrator. When paused, the phone's usual screen timeout applies again.
+     */
+    private fun keepScreenOn(on: Boolean) {
+        val window = activity?.window ?: return
+        if (on) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     private fun onLoadAudioBook(@Suppress("UNUSED_PARAMETER") view: View) {
         model.viewModelScope.launch {
             Timber.d("Load Audio Book")
-
-            sharedStoragePickerLauncher.launch(arrayOf("*/*"))
-
+            chooseAudiobook()
         }
+    }
+
+    /** Asks whether the audiobook is a folder of files (one per chapter, say) or a single file. */
+    private fun chooseAudiobook() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.audiobook_choose_title)
+            .setItems(
+                arrayOf(
+                    getString(R.string.audiobook_choose_folder),
+                    getString(R.string.audiobook_choose_file)
+                )
+            ) { _, which ->
+                if (which == 0) {
+                    folderPickerLauncher.launch(null)
+                } else {
+                    sharedStoragePickerLauncher.launch(arrayOf("*/*"))
+                }
+            }
+            .show()
     }
 
     private fun onSetSpeed(@Suppress("UNUSED_PARAMETER") view: View) {
@@ -1552,26 +1606,36 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         val book = checkNotNull(application.bookRepository.getAudiobook(bookId))
-        val asset = readium.assetRetriever.retrieve(
-            book.url,
-            book.mediaType
-        ).getOrElse {
-            return@getOrElse Try.failure(
-                OpeningError.PublicationError(
-                    PublicationError(it)
+        val audioPublicationLoader = if (book.mediaType == AudiobookFolder.MEDIA_TYPE) {
+            val appContext = requireContext().applicationContext
+            withContext(Dispatchers.IO) {
+                AudiobookFolder.open(appContext, Uri.parse(book.href), book.title)
+            } ?: run {
+                Timber.e("The audiobook folder ${book.href} has no audio files any more")
+                return
+            }
+        } else {
+            val asset = readium.assetRetriever.retrieve(
+                book.url,
+                book.mediaType
+            ).getOrElse {
+                return@getOrElse Try.failure(
+                    OpeningError.PublicationError(
+                        PublicationError(it)
+                    )
                 )
-            )
-        }
+            }
 
-        val audioPublicationLoader = readium.publicationOpener.open(
-            asset as Asset,
-            allowUserInteraction = true
-        ).getOrElse {
-            return@getOrElse Try.failure(
-                OpeningError.PublicationError(
-                    PublicationError(it)
+            readium.publicationOpener.open(
+                asset as Asset,
+                allowUserInteraction = true
+            ).getOrElse {
+                return@getOrElse Try.failure(
+                    OpeningError.PublicationError(
+                        PublicationError(it)
+                    )
                 )
-            )
+            }
         }
 
         val initialLocator = book.progression
@@ -1591,6 +1655,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         audioNavigator = readerInitData.getOrNull()!!
         audioPublication = audioPublicationLoader
+        audioTimeline = AudiobookTimeline(
+            audioNavigator.readingOrder.items.mapIndexed { index, item ->
+                item.duration ?: Duration.ZERO.also { Timber.w("Track $index has no duration: ${item.href}") }
+            }
+        )
 
         // The times are shown at the chosen speed: refresh them when it changes, even while paused
         audioPreferences?.let { preferences ->
@@ -1599,8 +1668,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
             }
         }
 
-        totalTimeOfAudio =
-            audioNavigator.readingOrder.items[0].duration?.formatElapsedTime().toString()
+        totalTimeOfAudio = audioTimeline.duration.formatElapsedTime()
 
         audioNavigator.playback
             .onEach { onPlaybackChanged(it) }
@@ -1610,8 +1678,11 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
         // LOAD TRANSCRIPT
 
-        val audioUri =
-            Uri.parse(audioPublication.get(audioPublication.readingOrder[0].url())!!.sourceUrl.toString())
+        val trackUris = audioPublication.readingOrder.mapNotNull { link ->
+            audioPublication.get(link.url())?.let { resource ->
+                resource.sourceUrl.also { resource.close() }
+            }?.let { Uri.parse(it.toString()) }
+        }
         val appContext = requireContext().applicationContext
         val previousExtractor = audioSegmentExtractor
         // A clip cut ahead from a previous audiobook must not be transcribed for this one
@@ -1619,10 +1690,10 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         prefetchedWavPath = null
         audioSegmentExtractor = withContext(Dispatchers.IO) {
             previousExtractor?.close()
-            try {
-                AudioSegmentExtractor.open(appContext, audioUri)
-            } catch (e: Exception) {
-                Timber.e(e, "Cannot open audiobook for transcription: $audioUri")
+            if (trackUris.size == audioPublication.readingOrder.size) {
+                AudiobookSegmentExtractor(appContext, trackUris, audioTimeline)
+            } else {
+                Timber.e("Cannot transcribe the audiobook: some tracks can't be read in place")
                 null
             }
         }
@@ -1707,6 +1778,30 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
     ) {
         coroutineScope.launch {
             addBookFeedback(url)
+        }
+    }
+
+    /** Uses the audio files in the picked folder, in file name order, as this book's audiobook. */
+    private fun addAudiobookFolder(treeUri: Uri) {
+        val appContext = requireContext().applicationContext
+        coroutineScope.launch {
+            val title = withContext(Dispatchers.IO) { AudiobookFolder.name(appContext, treeUri) }
+            val publication = withContext(Dispatchers.IO) { AudiobookFolder.open(appContext, treeUri, title) }
+            if (publication == null) {
+                Toast.makeText(appContext, R.string.audiobook_folder_empty, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            application.bookRepository.insertAudioBook(
+                treeUri.toUrl()!!,
+                AudiobookFolder.MEDIA_TYPE,
+                publication,
+                epubBookId
+            )
+            try {
+                loadAudiobookNavigator(epubBookId)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to load audiobook navigator")
+            }
         }
     }
 

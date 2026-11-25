@@ -44,6 +44,7 @@ class BookshelfFragment : Fragment() {
     private lateinit var bookshelfAdapter: BookshelfAdapter
     private lateinit var appStoragePickerLauncher: ActivityResultLauncher<String>
     private lateinit var sharedStoragePickerLauncher: ActivityResultLauncher<Array<String>>
+    private lateinit var bookFolderPickerLauncher: ActivityResultLauncher<Uri?>
     private var binding: FragmentBookshelfBinding by viewLifecycle()
 
     private val app: Application
@@ -89,6 +90,14 @@ class BookshelfFragment : Fragment() {
                 }
             }
 
+        bookFolderPickerLauncher =
+            registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+                uri?.let {
+                    requireContext().contentResolver.persistDocumentAccess(it)
+                    bookshelfViewModel.addBookFolder(it)
+                }
+            }
+
         binding.bookshelfBookList.apply {
             setHasFixedSize(true)
             layoutManager = GridAutoFitLayoutManager(requireContext(), 120)
@@ -125,8 +134,27 @@ class BookshelfFragment : Fragment() {
 //                    selected = which
 //                }
 //                .show()
-            sharedStoragePickerLauncher.launch(arrayOf("*/*"))
+            chooseWhatToAdd()
         }
+    }
+
+    /** Asks whether to add an EPUB on its own, or a folder holding a book and its audiobook. */
+    private fun chooseWhatToAdd() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.add_book)
+            .setItems(
+                arrayOf(
+                    getString(R.string.add_book_epub_file),
+                    getString(R.string.add_book_folder)
+                )
+            ) { _, which ->
+                if (which == 0) {
+                    sharedStoragePickerLauncher.launch(arrayOf("*/*"))
+                } else {
+                    bookFolderPickerLauncher.launch(null)
+                }
+            }
+            .show()
     }
 
     @OptIn(DelicateReadiumApi::class)

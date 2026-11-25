@@ -57,25 +57,34 @@ class AudioSegmentExtractor private constructor(
      * Decodes [durationSeconds] of audio starting at [startSeconds] and writes it to
      * [outputWavPath]. Returns false if decoding fails.
      */
-    @Synchronized
     fun extractToWav(outputWavPath: String, startSeconds: Int, durationSeconds: Int): Boolean {
-        val startUs = startSeconds * 1_000_000L
-        val endUs = startUs + durationSeconds * 1_000_000L
+        val samples = extractSamples(startSeconds * 1_000_000L, durationSeconds * 1_000_000L) ?: return false
+        writeWav(outputWavPath, samples)
+        return true
+    }
+
+    /**
+     * Decodes [durationUs] of audio starting at [startUs], as 16 kHz mono samples. Returns fewer
+     * if the file ends first, or null if decoding fails.
+     */
+    @Synchronized
+    fun extractSamples(startUs: Long, durationUs: Long): FloatArray? {
+        val endUs = startUs + durationUs
         val startedAt = System.currentTimeMillis()
 
         return try {
             val contiguous = startUs == nextStartUs
             if (!contiguous) seekTo(startUs)
 
-            val mono = FloatArrayBuilder(durationSeconds * sampleRate)
+            val mono = FloatArrayBuilder((durationUs * sampleRate / 1_000_000L).toInt())
             var reachedEnd = takePending(startUs, endUs, mono)
             val info = MediaCodec.BufferInfo()
 
             while (!reachedEnd && !outputDone) {
                 if (System.currentTimeMillis() - startedAt > DECODE_TIMEOUT_MS) {
-                    Timber.e("Timed out decoding $startSeconds s + $durationSeconds s")
+                    Timber.e("Timed out decoding $startUs us + $durationUs us")
                     nextStartUs = -1L
-                    return false
+                    return null
                 }
                 if (!inputDone) queueInput()
 
@@ -109,16 +118,15 @@ class AudioSegmentExtractor private constructor(
             nextStartUs = endUs
 
             val resampled = resample(mono.toArray(), sampleRate, TARGET_SAMPLE_RATE)
-            WaveUtil.createWaveFile(outputWavPath, toPcm16(resampled), TARGET_SAMPLE_RATE, 1, 2)
             Timber.d(
-                "Extracted ${resampled.size} samples at $startSeconds s " +
+                "Extracted ${resampled.size} samples at ${startUs / 1000} ms " +
                     "(${if (contiguous) "contiguous" else "seek"}, ${System.currentTimeMillis() - startedAt} ms)"
             )
-            true
+            resampled
         } catch (e: Exception) {
-            Timber.e(e, "Failed to extract audio segment at $startSeconds s")
+            Timber.e(e, "Failed to extract audio segment at ${startUs / 1000} ms")
             nextStartUs = -1L
-            false
+            null
         }
     }
 
@@ -221,7 +229,7 @@ class AudioSegmentExtractor private constructor(
     }
 
     companion object {
-        private const val TARGET_SAMPLE_RATE = 16000
+        const val TARGET_SAMPLE_RATE = 16000
         private const val TIMEOUT_US = 10_000L
         private const val DECODE_TIMEOUT_MS = 15_000L
 
@@ -242,6 +250,11 @@ class AudioSegmentExtractor private constructor(
                 throw e
             }
             return AudioSegmentExtractor(extractor)
+        }
+
+        /** Writes 16 kHz mono [samples] as the WAV file Whisper reads. */
+        fun writeWav(outputWavPath: String, samples: FloatArray) {
+            WaveUtil.createWaveFile(outputWavPath, toPcm16(samples), TARGET_SAMPLE_RATE, 1, 2)
         }
 
         /**

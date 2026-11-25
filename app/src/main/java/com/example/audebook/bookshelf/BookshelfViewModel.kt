@@ -40,6 +40,10 @@ class BookshelfViewModel(application: Application) : AndroidViewModel(applicatio
         app.bookshelf.addPublicationFromStorage(uri.toUrl()!! as AbsoluteUrl)
     }
 
+    fun addBookFolder(treeUri: Uri) {
+        app.bookshelf.addBookFolder(app, treeUri)
+    }
+
     fun addPublicationFromWeb(url: AbsoluteUrl) {
         app.bookshelf.addPublicationFromWeb(url)
     }
