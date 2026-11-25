@@ -857,6 +857,7 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         }
 
         if (endedState != null) {
+            keepScreenOn(false)
             audioNavigator.close()
             model.viewModelScope.launch {
                 application.bookRepository.deleteAudiobookTranscript(epubBookId)
@@ -876,10 +877,12 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
         if (playback.playWhenReady && !wasPlaying) {
             startSpeedRamp()
             startWordCursor()
+            keepScreenOn(true)
         } else if (!playback.playWhenReady && wasPlaying) {
             speedRampJob?.cancel()
             // The cursor stays on the last word while paused
             stopWordCursor()
+            keepScreenOn(false)
         }
         wasPlaying = playback.playWhenReady
 
@@ -1337,7 +1340,21 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     override fun onDestroyView() {
         (activity as? ReaderActivity)?.onAnyTouch = null
+        keepScreenOn(false)
         super.onDestroyView()
+    }
+
+    /**
+     * Keeps the screen awake while the audiobook plays, so the page stays readable as it follows
+     * the narrator. When paused, the phone's usual screen timeout applies again.
+     */
+    private fun keepScreenOn(on: Boolean) {
+        val window = activity?.window ?: return
+        if (on) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     private fun onLoadAudioBook(@Suppress("UNUSED_PARAMETER") view: View) {
