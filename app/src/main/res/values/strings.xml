@@ -136,8 +136,10 @@ We thank all the maintainers and contributors of these excellent open-source pro
     <string name="confirm_delete_catalog_text">Are you sure you want to delete this Catalog feed?</string>
 
     <string name="add_book">Add a Book</string>
-    <string name="add_book_epub_file">An eBook (EPUB file) on its own</string>
-    <string name="add_book_folder">A folder with the eBook and its audiobook in it together</string>
+    <string name="add_book_folder">eBook and audiobook together</string>
+    <string name="add_book_folder_description">Pick a folder that has both the EPUB and its audio files in it</string>
+    <string name="add_book_epub_file">eBook only</string>
+    <string name="add_book_epub_file_description">Pick an EPUB file. You can load its audiobook later in the reader.</string>
     <string name="import_folder_no_epub">No EPUB in that folder. Put the book and its audiobook in one folder.</string>
     <string name="add_catalog">Add an Catalog Feed</string>
     <string name="ok">OK</string>
@@ -153,8 +155,10 @@ We thank all the maintainers and contributors of these excellent open-source pro
 
     <string name="opening_publication_cannot_render">Cannot render publication.</string>
     <string name="audiobook_choose_title">Load audiobook</string>
-    <string name="audiobook_choose_folder">A folder of audio files (one per chapter)</string>
-    <string name="audiobook_choose_file">A single audio file</string>
+    <string name="audiobook_choose_folder">Folder of audio files</string>
+    <string name="audiobook_choose_folder_description">One file per chapter, played in order</string>
+    <string name="audiobook_choose_file">Single audio file</string>
+    <string name="audiobook_choose_file_description">One file for the whole book, like an M4B or MP3</string>
     <string name="audiobook_folder_empty">No audio files found in that folder</string>
     <string name="opening_publication_audio_engine_initialization">Could not open publication because audio engine initialization failed.</string>
 

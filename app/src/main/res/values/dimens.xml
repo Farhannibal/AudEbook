@@ -1,4 +1,6 @@
 <resources>
     <!-- Other dimensions -->
     <dimen name="padding_40dp">40dp</dimen>
+    <!-- Matches the side margins of a Material dialog's title -->
+    <dimen name="choice_dialog_padding">24dp</dimen>
 </resources>

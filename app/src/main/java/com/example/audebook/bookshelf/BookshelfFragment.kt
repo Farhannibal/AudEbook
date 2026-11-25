@@ -34,6 +34,7 @@ import com.example.audebook.data.model.Book
 import com.example.audebook.databinding.FragmentBookshelfBinding
 import com.example.audebook.opds.GridAutoFitLayoutManager
 import com.example.audebook.reader.ReaderActivityContract
+import com.example.audebook.utils.ChoiceDialog
 import com.example.audebook.utils.extensions.persistDocumentAccess
 import com.example.audebook.utils.viewLifecycle
 import timber.log.Timber
@@ -140,21 +141,22 @@ class BookshelfFragment : Fragment() {
 
     /** Asks whether to add an EPUB on its own, or a folder holding a book and its audiobook. */
     private fun chooseWhatToAdd() {
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.add_book)
-            .setItems(
-                arrayOf(
-                    getString(R.string.add_book_epub_file),
-                    getString(R.string.add_book_folder)
-                )
-            ) { _, which ->
-                if (which == 0) {
-                    sharedStoragePickerLauncher.launch(arrayOf("*/*"))
-                } else {
-                    bookFolderPickerLauncher.launch(null)
-                }
-            }
-            .show()
+        ChoiceDialog.show(
+            requireContext(),
+            R.string.add_book,
+            listOf(
+                ChoiceDialog.Choice(
+                    R.drawable.ic_choice_folder_24,
+                    R.string.add_book_folder,
+                    R.string.add_book_folder_description
+                ) { bookFolderPickerLauncher.launch(null) },
+                ChoiceDialog.Choice(
+                    R.drawable.ic_choice_book_24,
+                    R.string.add_book_epub_file,
+                    R.string.add_book_epub_file_description
+                ) { sharedStoragePickerLauncher.launch(arrayOf("*/*")) }
+            )
+        )
     }
 
     @OptIn(DelicateReadiumApi::class)

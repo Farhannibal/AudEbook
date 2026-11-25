@@ -29,7 +29,6 @@ import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.Toast
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.ColorInt
@@ -81,6 +80,7 @@ import com.example.audebook.asr.Whisper
 import com.example.audebook.engine.WhisperEngineJava
 import com.example.audebook.domain.PublicationError
 import com.example.audebook.domain.toUserError
+import com.example.audebook.utils.ChoiceDialog
 import com.example.audebook.utils.UserError
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.launchIn
@@ -1366,21 +1366,22 @@ class EpubReaderFragment : VisualReaderFragment(), SeekBar.OnSeekBarChangeListen
 
     /** Asks whether the audiobook is a folder of files (one per chapter, say) or a single file. */
     private fun chooseAudiobook() {
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.audiobook_choose_title)
-            .setItems(
-                arrayOf(
-                    getString(R.string.audiobook_choose_folder),
-                    getString(R.string.audiobook_choose_file)
-                )
-            ) { _, which ->
-                if (which == 0) {
-                    folderPickerLauncher.launch(null)
-                } else {
-                    sharedStoragePickerLauncher.launch(arrayOf("*/*"))
-                }
-            }
-            .show()
+        ChoiceDialog.show(
+            requireContext(),
+            R.string.audiobook_choose_title,
+            listOf(
+                ChoiceDialog.Choice(
+                    R.drawable.ic_choice_audio_folder_24,
+                    R.string.audiobook_choose_folder,
+                    R.string.audiobook_choose_folder_description
+                ) { folderPickerLauncher.launch(null) },
+                ChoiceDialog.Choice(
+                    R.drawable.ic_choice_audio_file_24,
+                    R.string.audiobook_choose_file,
+                    R.string.audiobook_choose_file_description
+                ) { sharedStoragePickerLauncher.launch(arrayOf("*/*")) }
+            )
+        )
     }
 
     private fun onSetSpeed(@Suppress("UNUSED_PARAMETER") view: View) {
