@@ -23,7 +23,6 @@
     --accent-soft: #fde7dc;
     --on-accent: #ffffff;
     --shadow: 0 10px 30px rgba(120, 50, 10, .12);
-    --placeholder: #f3ebe4;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -38,7 +37,6 @@
       --accent-soft: #3a2518;
       --on-accent: #1b0f06;
       --shadow: 0 10px 30px rgba(0, 0, 0, .45);
-      --placeholder: #2a2320;
     }
   }
   * { box-sizing: border-box; }
@@ -107,29 +105,10 @@
     border-radius: 2rem; padding: .55rem; background: #111;
     box-shadow: var(--shadow);
   }
-  .phone img { border-radius: 1.55rem; width: 100%; }
+  .phone img, .phone video { border-radius: 1.55rem; width: 100%; display: block; }
+  .phone video { aspect-ratio: 480 / 1040; height: auto; background: #000; }
   .phone.landscape { border-radius: 1.6rem; }
   .phone.landscape img { border-radius: 1.15rem; }
-
-  /* Placeholders for media still to be recorded */
-  .placeholder {
-    display: grid; place-items: center; text-align: center;
-    background: var(--placeholder);
-    border: 2px dashed var(--rule);
-    border-radius: 1rem; color: var(--muted);
-    padding: 1.5rem;
-  }
-  .placeholder strong { display: block; color: var(--text); margin-bottom: .25rem; }
-  .video { aspect-ratio: 16 / 9; max-width: 52rem; margin: 2rem auto 0; }
-  .play-icon {
-    width: 4rem; height: 4rem; border-radius: 50%; margin: 0 auto .75rem;
-    background: var(--accent); display: grid; place-items: center;
-  }
-  .play-icon::after {
-    content: ""; margin-left: .3rem;
-    border-left: 1.1rem solid var(--on-accent);
-    border-top: .7rem solid transparent; border-bottom: .7rem solid transparent;
-  }
 
   /* Feature cards */
   .grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)); margin-top: 2rem; }
@@ -190,7 +169,13 @@
     padding: .9rem 1.1rem; border-radius: 0 .75rem .75rem 0; margin: 1.5rem 0 0;
   }
   .note p { margin: 0; }
-  .clip { aspect-ratio: 9 / 16; max-width: 15rem; margin: 1.5rem 0 0; font-size: .92rem; }
+  .walkthrough { max-width: 15rem; margin: 1.5rem 0 0; }
+  .walkthrough figcaption, .clips figcaption { text-align: center; color: var(--muted); font-size: .92rem; margin-top: .75rem; }
+
+  /* Clips of the app in use */
+  .clips { display: grid; grid-template-columns: repeat(2, minmax(0, 15rem)); gap: 2rem; justify-content: center; margin-top: 2.5rem; }
+  .clips figure { margin: 0; }
+  @media (max-width: 560px) { .clips { gap: 1rem; } }
 
   /* Screenshots */
   .shots { display: grid; grid-template-columns: 1fr 1.9fr 1fr; gap: 1.5rem; align-items: center; margin-top: 2.5rem; }
@@ -253,8 +238,9 @@
         <p class="fine">Free for Android. Works offline. Your books never leave your phone.</p>
       </div>
       <div class="phone">
-        <img src="play-store/screenshots/1-reader-sync.png" width="1080" height="1920"
-          alt="AudEBook highlighting the passage being read in Alice's Adventures in Wonderland, with the current word marked">
+        <video src="media/hero-reading.mp4" poster="media/hero-reading.jpg" width="480" height="1040"
+          muted loop playsinline preload="metadata" data-autoplay
+          aria-label="AudEBook highlighting Alice's Adventures in Wonderland as the narrator reads it, with the page scrolling along"></video>
       </div>
     </div>
   </section>
@@ -263,25 +249,23 @@
     <div class="wrap center">
       <h2>See it in action</h2>
       <p class="lead">A quick look at a book and its audiobook playing together.</p>
-      <!--
-        DEMO VIDEO PLACEHOLDER
-        Replace the whole <div class="placeholder video"> below with either:
-          a YouTube embed:
-            <iframe class="video" style="width:100%;border:0;border-radius:1rem"
-              src="https://www.youtube-nocookie.com/embed/VIDEO_ID"
-              title="AudEBook demo" allowfullscreen></iframe>
-          or a video file saved in docs/media/ (keep it small, under ~20 MB):
-            <video class="video" style="width:100%;border-radius:1rem" controls playsinline
-              poster="play-store/feature-graphic-1024x500.png" src="media/demo.mp4"></video>
-        Suggested: a 30 to 60 second screen recording of a book playing, with the highlight
-        moving and the page scrolling along.
-      -->
-      <div class="placeholder video" role="img" aria-label="Demo video coming soon">
-        <div>
-          <div class="play-icon" aria-hidden="true"></div>
-          <strong>Demo video coming soon</strong>
-          A short recording of AudEBook following a narrator, word by word.
-        </div>
+      <div class="clips">
+        <figure>
+          <div class="phone">
+            <video src="media/sync-frankenstein.mp4" poster="media/sync-frankenstein.jpg" width="480" height="1040"
+              muted loop playsinline preload="none" data-autoplay
+              aria-label="Frankenstein being read along, the highlight moving down the page with the narrator"></video>
+          </div>
+          <figcaption>Follows the narrator</figcaption>
+        </figure>
+        <figure>
+          <div class="phone">
+            <video src="media/speed-and-text.mp4" poster="media/speed-and-text.jpg" width="480" height="1040"
+              muted loop playsinline preload="none" data-autoplay
+              aria-label="Raising the playback speed and the text size while the book keeps syncing"></video>
+          </div>
+          <figcaption>Change the speed or text size</figcaption>
+        </figure>
       </div>
     </div>
   </section>
@@ -406,18 +390,14 @@
               read and tap the <strong>anchor</strong> button. AudEBook resyncs from there.</p>
             </li>
           </ol>
-          <!--
-            SETUP CLIP PLACEHOLDER (optional)
-            Replace with a short portrait screen recording of adding a book folder, e.g.:
-              <video class="clip" style="width:100%;border-radius:1rem" autoplay muted loop playsinline
-                src="media/add-book-folder.mp4"></video>
-          -->
-          <div class="placeholder clip" role="img" aria-label="Setup walkthrough coming soon">
-            <div>
-              <strong>Setup walkthrough coming soon</strong>
-              A short clip of adding a book folder.
+          <figure class="walkthrough">
+            <div class="phone">
+              <video src="media/add-book-folder.mp4" poster="media/add-book-folder.jpg" width="480" height="1040"
+                muted loop playsinline controls preload="none" data-autoplay
+                aria-label="Adding a book: picking the folder with the eBook and its audiobook, then opening it"></video>
             </div>
-          </div>
+            <figcaption>Adding a book from its folder</figcaption>
+          </figure>
         </div>
       </div>
 
@@ -521,6 +501,29 @@
     </nav>
   </div>
 </footer>
+
+<script>
+  (function () {
+    var videos = document.querySelectorAll("video[data-autoplay]");
+    var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still || !("IntersectionObserver" in window)) {
+      videos.forEach(function (v) { v.controls = true; });
+      return;
+    }
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var video = entry.target;
+        if (entry.isIntersecting) {
+          var playing = video.play();
+          if (playing && playing.catch) playing.catch(function () { video.controls = true; });
+        } else {
+          video.pause();
+        }
+      });
+    }, { threshold: 0.4 });
+    videos.forEach(function (v) { observer.observe(v); });
+  })();
+</script>
 
 </body>
 </html>

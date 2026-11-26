@@ -20,3 +20,6 @@ local.properties
 *.jks
 *.keystore
 /.idea/deploymentTargetSelector.xml
+
+# Raw screen recordings; the page uses the compressed copies in docs/media
+/docs/videos/
